@@ -3,13 +3,19 @@
 
 static const char *NVS_NS = "jetclock";
 
+void config_reset(AppConfig &cfg) {
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.version    = CONFIG_VERSION;
+    cfg.radius_nm  = 30;
+}
+
 bool config_load(AppConfig &cfg) {
     Preferences prefs;
     prefs.begin(NVS_NS, true);  // read-only
 
     if (!prefs.isKey("version")) {
         prefs.end();
-        cfg = kDefaultConfig;
+        config_reset(cfg);
         return false;
     }
 

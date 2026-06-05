@@ -65,7 +65,6 @@
    Logging
    ======================== */
 #define LV_USE_LOG 0
-#define LV_LOG_LEVEL LV_LOG_LEVEL_WARN
 #define LV_LOG_PRINTF 0
 #define LV_LOG_TRACE_MEM 0
 #define LV_LOG_TRACE_TIMER 0

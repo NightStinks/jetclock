@@ -29,3 +29,7 @@ void ui_set_button_state(int idx, bool on);
 
 // Apply a theme by name ("Warm Brown", "Midnight", "Forest", "iOS")
 void ui_apply_theme(const char *theme_name);
+
+// Register the function to call when a button is tapped.
+// Must be set before ui_init() creates buttons, or buttons won't be clickable.
+void ui_set_toggle_callback(void (*cb)(int button_idx));

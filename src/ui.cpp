@@ -36,6 +36,8 @@ static lv_obj_t *p2_lbl_origin;
 static lv_obj_t *p2_lbl_dest;
 static lv_obj_t *p2_img_plane;
 
+static void (*s_toggle_cb)(int) = nullptr;
+
 // Cached config
 static int   s_screen_bearing = 0;
 static float s_bearing_deg    = 0.0f;
@@ -174,8 +176,7 @@ static void build_page_main(const AppConfig &cfg) {
             lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
             int *idx_ptr = new int(i);
             lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-                int idx = *(int *)lv_event_get_user_data(e);
-                ha_client_toggle(idx);
+                if (s_toggle_cb) s_toggle_cb(*(int *)lv_event_get_user_data(e));
             }, LV_EVENT_CLICKED, idx_ptr);
         }
 
@@ -373,6 +374,10 @@ void ui_set_button_state(int idx, bool on) {
     lv_color_t txt_col = on ? s_theme.pri  : s_theme.sec;
     lv_obj_set_style_bg_color(btn_objs[idx],   bg_col,  0);
     lv_obj_set_style_text_color(btn_labels[idx], txt_col, 0);
+}
+
+void ui_set_toggle_callback(void (*cb)(int button_idx)) {
+    s_toggle_cb = cb;
 }
 
 void ui_apply_theme(const char *name) {

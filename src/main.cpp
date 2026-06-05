@@ -150,6 +150,7 @@ void setup() {
     ntp_init();
 
     // Build UI with configured button labels
+    ui_set_toggle_callback([](int idx) { ha_client_toggle(idx); });
     ui_init(cfg);
 
     // Restore last theme from NVS (stored separately — not in AppConfig for now)

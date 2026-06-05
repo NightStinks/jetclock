@@ -4,8 +4,6 @@
 #include <ArduinoJson.h>
 #include <math.h>
 
-#define DEG_TO_RAD (M_PI / 180.0f)
-
 static float s_home_lat   = 0.0f;
 static float s_home_lon   = 0.0f;
 static int   s_radius_nm  = 30;

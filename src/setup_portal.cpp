@@ -98,7 +98,7 @@ static void handle_post_config(AsyncWebServerRequest *req,
 
 static void handle_factory_reset(AsyncWebServerRequest *req, AppConfig &cfg) {
     config_erase();
-    cfg = kDefaultConfig;
+    config_reset(cfg);
     req->send(200, "application/json", "{\"ok\":true}");
     delay(500);
     ESP.restart();

@@ -37,22 +37,8 @@ struct AppConfig {
     int num_buttons;
 };
 
-// Defaults applied on first boot
-static const AppConfig kDefaultConfig = {
-    .version       = CONFIG_VERSION,
-    .wifi_ssid     = "",
-    .wifi_password = "",
-    .home_lat      = 0.0f,
-    .home_lon      = 0.0f,
-    .radius_nm     = 30,
-    .screen_bearing = 0,
-    .ha_url        = "",
-    .ha_token      = "",
-    .temp_entity   = "",
-    .humidity_entity = "",
-    .buttons       = {},
-    .num_buttons   = 0,
-};
+// Zero-fill cfg and apply factory defaults.
+void config_reset(AppConfig &cfg);
 
 // Load from NVS. Returns false and fills defaults if nothing stored yet.
 bool config_load(AppConfig &cfg);

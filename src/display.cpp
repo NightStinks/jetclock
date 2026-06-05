@@ -79,7 +79,7 @@ static void st7701s_init() {
 
 static void panel_init() {
     esp_lcd_rgb_panel_config_t cfg = {};
-    cfg.clk_src                    = LCD_CLK_SRC_DEFAULT;
+    cfg.clk_src                    = LCD_CLK_SRC_XTAL;
     cfg.timings.pclk_hz            = PCLK_HZ;
     cfg.timings.h_res              = LCD_W;
     cfg.timings.v_res              = LCD_H;
@@ -133,7 +133,7 @@ static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t 
 
 // ── GT911 touch ───────────────────────────────────────────────────────────
 
-static bool gt911_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+static void gt911_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     static int16_t last_x = 0, last_y = 0;
 
     Wire.beginTransmission(GT911_ADDR);
@@ -143,49 +143,43 @@ static bool gt911_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 
     Wire.requestFrom((int)GT911_ADDR, 1);
     if (!Wire.available()) {
-        data->state = LV_INDEV_STATE_REL;
-        return false;
+        data->state   = LV_INDEV_STATE_REL;
+        data->point.x = last_x;
+        data->point.y = last_y;
+        return;
     }
 
-    uint8_t status = Wire.read();
+    uint8_t status      = Wire.read();
     uint8_t touch_count = status & 0x0F;
 
     if (!(status & 0x80) || touch_count == 0) {
-        // Clear status register
         Wire.beginTransmission(GT911_ADDR);
-        Wire.write(0x81); Wire.write(0x4E);
-        Wire.write(0x00);
+        Wire.write(0x81); Wire.write(0x4E); Wire.write(0x00);
         Wire.endTransmission();
-        data->state = LV_INDEV_STATE_REL;
+        data->state   = LV_INDEV_STATE_REL;
         data->point.x = last_x;
         data->point.y = last_y;
-        return false;
+        return;
     }
 
-    // Read first touch point (8 bytes per point starting at 0x8150)
+    // Read first touch point (8 bytes starting at 0x8150)
     Wire.beginTransmission(GT911_ADDR);
     Wire.write(0x81); Wire.write(0x50);
     Wire.endTransmission();
     Wire.requestFrom((int)GT911_ADDR, 8);
 
     uint8_t buf[8] = {};
-    for (int i = 0; i < 8 && Wire.available(); i++) {
-        buf[i] = Wire.read();
-    }
+    for (int i = 0; i < 8 && Wire.available(); i++) buf[i] = Wire.read();
 
-    // Clear status register
     Wire.beginTransmission(GT911_ADDR);
-    Wire.write(0x81); Wire.write(0x4E);
-    Wire.write(0x00);
+    Wire.write(0x81); Wire.write(0x4E); Wire.write(0x00);
     Wire.endTransmission();
 
-    last_x = (int16_t)((buf[2] << 8) | buf[1]);
-    last_y = (int16_t)((buf[4] << 8) | buf[3]);
-
+    last_x        = (int16_t)((buf[2] << 8) | buf[1]);
+    last_y        = (int16_t)((buf[4] << 8) | buf[3]);
     data->point.x = last_x;
     data->point.y = last_y;
     data->state   = LV_INDEV_STATE_PR;
-    return false;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────

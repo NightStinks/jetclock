@@ -198,22 +198,39 @@ void display_init() {
     // RGB panel
     panel_init();
 
+    // Clear the panel frame buffer to black so there's no PSRAM garbage on screen
+    {
+        static lv_color_t black_row[LCD_W] = {};
+        for (int y = 0; y < LCD_H; y++) {
+            esp_lcd_panel_draw_bitmap(panel, 0, y, LCD_W, y + 1, black_row);
+        }
+    }
+
     // LVGL
     lv_init();
 
-    draw_buf1 = (lv_color_t *)heap_caps_malloc(
-        LCD_W * DRAW_BUF_LINES * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
-    draw_buf2 = (lv_color_t *)heap_caps_malloc(
-        LCD_W * DRAW_BUF_LINES * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
+    // LVGL draw buffers: MALLOC_CAP_SPIRAM only (no MALLOC_CAP_DMA — that
+    // flag is for internal SRAM DMA and is incompatible with PSRAM on S3).
+    // Fall back to internal SRAM if PSRAM allocation fails.
+    size_t buf_bytes = LCD_W * DRAW_BUF_LINES * sizeof(lv_color_t);
+    draw_buf1 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM);
+    draw_buf2 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM);
+    if (!draw_buf1 || !draw_buf2) {
+        Serial.println("[display] PSRAM alloc failed, falling back to SRAM");
+        free(draw_buf1); free(draw_buf2);
+        draw_buf1 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL);
+        draw_buf2 = (lv_color_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_INTERNAL);
+    }
+    if (!draw_buf1) { Serial.println("[display] FATAL: no memory for draw buffer"); return; }
 
     lv_disp_draw_buf_init(&draw_buf_dsc, draw_buf1, draw_buf2, LCD_W * DRAW_BUF_LINES);
 
     lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res    = LCD_W;
-    disp_drv.ver_res    = LCD_H;
-    disp_drv.flush_cb   = lvgl_flush_cb;
-    disp_drv.draw_buf   = &draw_buf_dsc;
-    disp_drv.full_refresh = 0;
+    disp_drv.hor_res      = LCD_W;
+    disp_drv.ver_res      = LCD_H;
+    disp_drv.flush_cb     = lvgl_flush_cb;
+    disp_drv.draw_buf     = &draw_buf_dsc;
+    disp_drv.full_refresh = 1;  // always redraw full screen to avoid partial-flush artefacts
     lv_disp_drv_register(&disp_drv);
 
     lv_indev_drv_init(&indev_drv);

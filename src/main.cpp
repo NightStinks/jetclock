@@ -123,23 +123,59 @@ void setup() {
     // Initialise display regardless — show a status screen
     display_init();
 
-    if (!has_config || !config_is_configured(cfg)) {
-        Serial.println("[boot] No config — starting setup portal");
-        // setup_portal_run() does not return; it reboots when done
+    auto run_portal = [&]() {
         if (!LittleFS.begin(true)) {
             Serial.println("[boot] LittleFS failed — cannot serve setup UI");
         }
-        setup_portal_run(cfg);
-        return;  // unreachable
+        // Show instructions on-screen while the portal is active
+        lv_obj_t *scr = lv_scr_act();
+        lv_obj_set_style_bg_color(scr, lv_color_hex(0x1a1a2e), 0);
+        lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+
+        lv_obj_t *title = lv_label_create(scr);
+        lv_obj_set_style_text_font(title, &lv_font_montserrat_40, 0);
+        lv_obj_set_style_text_color(title, lv_color_hex(0x58a6ff), 0);
+        lv_label_set_text(title, "JetClock");
+        lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 60);
+
+        lv_obj_t *sub = lv_label_create(scr);
+        lv_obj_set_style_text_font(sub, &lv_font_montserrat_18, 0);
+        lv_obj_set_style_text_color(sub, lv_color_hex(0xe6edf3), 0);
+        lv_label_set_text(sub, "Setup mode");
+        lv_obj_align(sub, LV_ALIGN_TOP_MID, 0, 116);
+
+        lv_obj_t *body = lv_label_create(scr);
+        lv_obj_set_style_text_font(body, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_color(body, lv_color_hex(0x8b949e), 0);
+        lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_width(body, 400);
+        lv_label_set_text(body,
+            "Connect your phone or laptop to:\n\n"
+            "Wi-Fi:  JetClock-Setup\n\n"
+            "A setup page will open automatically.\n"
+            "Enter your Wi-Fi details and\n"
+            "Home Assistant connection.");
+        lv_obj_align(body, LV_ALIGN_CENTER, 0, 30);
+
+        uint32_t last_tick = millis();
+        setup_portal_run(cfg, [&]() {
+            uint32_t now = millis();
+            lv_tick_inc(now - last_tick);
+            last_tick = now;
+            lv_timer_handler();
+        });
+    };
+
+    if (!has_config || !config_is_configured(cfg)) {
+        Serial.println("[boot] No config — starting setup portal");
+        run_portal();
+        return;  // unreachable (run_portal reboots)
     }
 
     // Connect to WiFi
     if (!wifi_connect()) {
         Serial.println("[boot] WiFi failed — starting setup portal");
-        if (!LittleFS.begin(false)) {
-            Serial.println("[boot] LittleFS mount failed");
-        }
-        setup_portal_run(cfg);
+        run_portal();
         return;  // unreachable
     }
 

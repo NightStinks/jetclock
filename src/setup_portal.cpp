@@ -106,7 +106,7 @@ static void handle_factory_reset(AsyncWebServerRequest *req, AppConfig &cfg) {
 
 // ── Portal entry point ────────────────────────────────────────────────────────
 
-void setup_portal_run(AppConfig &cfg) {
+void setup_portal_run(AppConfig &cfg, std::function<void()> tick_fn) {
     Serial.println("[portal] Starting setup AP: " + String(AP_SSID));
 
     WiFi.mode(WIFI_AP);
@@ -174,6 +174,7 @@ void setup_portal_run(AppConfig &cfg) {
 
     while (!config_saved) {
         dns.processNextRequest();
+        if (tick_fn) tick_fn();
         delay(10);
     }
 

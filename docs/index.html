@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JetClock — Flash your display</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg:     #0d1117;
+    --surface:#161b22;
+    --border: #30363d;
+    --text:   #e6edf3;
+    --muted:  #8b949e;
+    --accent: #58a6ff;
+    --green:  #3fb950;
+    --warn:   #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── Header ── */
+  header {
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header .logo {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  header .logo svg { width: 20px; height: 20px; }
+  header h1 { font-size: 18px; font-weight: 700; }
+  header .badge {
+    margin-left: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px;
+    padding: 3px 10px;
+    color: var(--muted);
+  }
+
+  /* ── Main content ── */
+  main {
+    width: 100%;
+    max-width: 700px;
+    padding: 48px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .hero { text-align: center; }
+  .hero h2 { font-size: 32px; font-weight: 800; line-height: 1.2; margin-bottom: 12px; }
+  .hero p  { font-size: 16px; color: var(--muted); line-height: 1.6; max-width: 500px; margin: 0 auto; }
+
+  /* ── Flash card ── */
+  .flash-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .flash-card-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+  }
+  .flash-card-body {
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    text-align: center;
+  }
+
+  /* ESP Web Tools button override */
+  esp-web-install-button::part(button) {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 14px 32px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  esp-web-install-button::part(button):hover { opacity: 0.85; }
+
+  .browser-note {
+    font-size: 13px;
+    color: var(--warn);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ── Steps ── */
+  .steps { display: flex; flex-direction: column; gap: 0; }
+  .step {
+    display: flex;
+    gap: 16px;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .step:last-child { border-bottom: none; }
+  .step-num {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    margin-top: 2px;
+  }
+  .step-body h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .step-body p  { font-size: 14px; color: var(--muted); line-height: 1.5; }
+  .step-body code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 13px;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+
+  /* ── Hardware card ── */
+  .hw-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+  .hw-icon {
+    flex-shrink: 0;
+    width: 56px; height: 56px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+  }
+  .hw-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .hw-card p  { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .hw-card a  { color: var(--accent); text-decoration: none; }
+  .hw-card a:hover { text-decoration: underline; }
+
+  /* ── Footer ── */
+  footer {
+    margin-top: auto;
+    width: 100%;
+    border-top: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 20 20" fill="white">
+      <path d="M10 2l2 5.5h5.5l-4.5 3.3 1.7 5.5L10 13 5.3 16.3 7 10.8 2.5 7.5H8z"/>
+    </svg>
+  </div>
+  <h1>JetClock</h1>
+  <span class="badge">v1.0.0</span>
+</header>
+
+<main>
+
+  <div class="hero">
+    <h2>Flight tracking for your wall</h2>
+    <p>JetClock turns a £16 touchscreen into a live flight radar and smart home controller. No ESPHome. No YAML. Just plug in and flash.</p>
+  </div>
+
+  <!-- ── Flash card ── -->
+  <div class="flash-card">
+    <div class="flash-card-header">Flash firmware</div>
+    <div class="flash-card-body">
+      <p style="color:var(--muted);font-size:14px;max-width:400px">
+        Connect your Guition ESP32-S3-4848S040 via USB-C, then click the button below.<br>
+        Chrome or Edge required — Web Serial is not supported in Firefox or Safari.
+      </p>
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate">⚡ Flash JetClock</button>
+      </esp-web-install-button>
+      <p class="browser-note">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 3a.75.75 0 110 1.5A.75.75 0 018 4zm.75 3.75a.75.75 0 00-1.5 0v3.5a.75.75 0 001.5 0v-3.5z"/></svg>
+        Requires Chrome or Edge on Windows, macOS, or Linux
+      </p>
+    </div>
+  </div>
+
+  <!-- ── After flashing ── -->
+  <div class="flash-card">
+    <div class="flash-card-header">After flashing</div>
+    <div class="flash-card-body" style="align-items:flex-start;text-align:left">
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h3>Connect to the setup network</h3>
+            <p>The display creates a Wi-Fi access point called <code>JetClock-Setup</code>. Connect to it from your phone or laptop — a setup page will open automatically.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h3>Fill in your details</h3>
+            <p>Enter your home Wi-Fi, your latitude/longitude, and your Home Assistant URL and token. Pick up to 5 HA entities for the smart home buttons.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h3>Save &amp; done</h3>
+            <p>Hit <strong>Save &amp; reboot</strong>. The display restarts, connects to your network, and starts showing flights overhead within 30 seconds.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Hardware ── -->
+  <div class="hw-card">
+    <div class="hw-icon">🖥</div>
+    <div>
+      <h3>Guition ESP32-S3-4848S040</h3>
+      <p>480×480 touchscreen display, ESP32-S3 dual-core, 16 MB flash, 8 MB PSRAM. Available on <a href="https://www.aliexpress.com/item/1005006705950069.html" target="_blank" rel="noopener">AliExpress</a> for around £16. This is the only supported hardware for v1.</p>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <a href="https://github.com/NightStinks/jetclock" target="_blank" rel="noopener">GitHub</a>
+  <a href="https://github.com/NightStinks/jetclock/issues" target="_blank" rel="noopener">Report an issue</a>
+</footer>
+
+</body>
+</html>

@@ -3,11 +3,9 @@
 #include <lvgl.h>
 #include <math.h>
 
-// ── Plane image (embedded as C array) ────────────────────────────────────
-// Replace with actual LV_IMG_DECLARE once you convert the PNG to C array
-// using LVGL's online converter (set format=CF_TRUE_COLOR_ALPHA, swap=true)
+// Plane image — src/plane_img.c (80x80, nose pointing RIGHT)
+// Transparent pixels are 0x0000 (black), rendered transparent via chroma key
 LV_IMG_DECLARE(plane_img_80);
-LV_IMG_DECLARE(plane_img_28);
 
 // ── Widget handles ────────────────────────────────────────────────────────
 static lv_obj_t *page_main   = nullptr;
@@ -270,8 +268,11 @@ static void build_page_radar() {
     lv_obj_clear_flag(home_dot, LV_OBJ_FLAG_CLICKABLE);
 
     // Aircraft icon
+    // Radar plane: same 80x80 image scaled to 28px via zoom (89/256 ≈ 28/80)
     p2_img_plane = lv_img_create(page_radar);
-    lv_img_set_src(p2_img_plane, &plane_img_28);
+    lv_img_set_src(p2_img_plane, &plane_img_80);
+    lv_img_set_zoom(p2_img_plane, 89);
+    lv_obj_set_size(p2_img_plane, 28, 28);
     lv_obj_set_pos(p2_img_plane, 226, 296);
     lv_img_set_pivot(p2_img_plane, 14, 14);
     lv_img_set_antialias(p2_img_plane, true);
@@ -337,9 +338,10 @@ void ui_set_flight(const FlightData &f, int screen_bearing_deg) {
     }
 
     // Direction arrow (page 1)
+    // Nose points RIGHT, so subtract 90° so that bearing=0 (north) → nose points up
     if (img_direction_arrow) {
         float b = f.bearing_deg;
-        int   angle_dd = (int)(fmodf(b - screen_bearing_deg + 360.0f, 360.0f) * 10.0f);
+        int   angle_dd = (int)(fmodf(b - screen_bearing_deg - 90.0f + 720.0f, 360.0f) * 10.0f);
         lv_img_set_pivot(img_direction_arrow, 40, 40);
         lv_img_set_angle(img_direction_arrow, angle_dd);
     }
@@ -358,7 +360,8 @@ void ui_set_flight(const FlightData &f, int screen_bearing_deg) {
         int py = (int)(310.0f - r * cosf(angle_rad)) - 14;
         lv_obj_set_pos(p2_img_plane, px, py);
 
-        int track_dd = (int)(f.track_deg * 10.0f);
+        // Track heading: subtract 90° because nose points right not up
+        int track_dd = (int)(fmodf(f.track_deg - 90.0f + 360.0f, 360.0f) * 10.0f);
         lv_img_set_pivot(p2_img_plane, 14, 14);
         lv_img_set_angle(p2_img_plane, track_dd);
     }

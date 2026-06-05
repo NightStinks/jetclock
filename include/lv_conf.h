@@ -15,7 +15,7 @@
 #define LV_COLOR_SCREEN_TRANSP 0
 
 /* Images pixels with this color will not be drawn (with chroma keying) */
-#define LV_COLOR_CHROMA_KEY lv_color_hex(0x00ff00)
+#define LV_COLOR_CHROMA_KEY lv_color_hex(0x000000)  /* black = transparent in plane_img */
 
 /* ========================
    Memory settings

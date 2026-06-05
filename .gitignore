@@ -1,0 +1,29 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Build artifacts
+build/
+*.bin
+*.elf
+*.map
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Secrets — never commit these
+secrets.yaml
+secrets.yml
+wifi_secrets.*
+
+# Node (if web tooling added later)
+node_modules/

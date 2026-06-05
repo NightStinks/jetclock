@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JetClock Setup</title>
+<style>
+  :root {
+    --bg:     #1a1a2e;
+    --surface:#16213e;
+    --card:   #0f3460;
+    --accent: #e94560;
+    --text:   #eaeaea;
+    --muted:  #a0a0b0;
+    --green:  #00b894;
+    --border: #2a2a4a;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+  header {
+    background: var(--card);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  header svg { flex-shrink: 0; }
+  header h1 { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+  header p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .container { max-width: 600px; margin: 0 auto; padding: 24px 16px; }
+
+  section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .section-header {
+    background: var(--card);
+    padding: 12px 18px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .section-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+  label { display: flex; flex-direction: column; gap: 5px; }
+  label span { font-size: 12px; color: var(--muted); font-weight: 600; }
+  label small { font-size: 11px; color: var(--muted); opacity: 0.7; margin-top: 2px; }
+
+  input, select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 15px;
+    padding: 10px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type=number] { -moz-appearance: textfield; }
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  select option { background: var(--bg); }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 13px 20px;
+    width: 100%;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:hover  { opacity: 0.88; }
+  .btn:active { transform: scale(0.98); }
+  .btn.secondary {
+    background: var(--border);
+    color: var(--muted);
+    font-weight: 500;
+    margin-top: 6px;
+  }
+  .btn.green { background: var(--green); }
+
+  .ha-test-row { display: flex; gap: 10px; align-items: flex-end; }
+  .ha-test-row label { flex: 1; }
+  .ha-test-row .btn { width: auto; padding: 10px 16px; font-size: 13px; flex-shrink: 0; }
+
+  .status {
+    border-radius: 6px;
+    font-size: 13px;
+    padding: 10px 14px;
+    display: none;
+  }
+  .status.ok  { background: rgba(0,184,148,0.15); color: var(--green); display: block; }
+  .status.err { background: rgba(233,69,96,0.15);  color: var(--accent); display: block; }
+  .status.info{ background: rgba(255,255,255,0.07); color: var(--muted); display: block; }
+
+  .btn-slot {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+  }
+  .btn-slot .slot-num {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .btn-slot select { font-size: 13px; }
+
+  #save-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex;
+    gap: 10px;
+    max-width: 100%;
+  }
+  #save-bar .btn { margin: 0; }
+
+  .loader {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <circle cx="18" cy="18" r="18" fill="#e94560" opacity="0.15"/>
+    <path d="M18 6l2.5 7h7l-5.7 4.1 2.2 7L18 20l-6 4.1 2.2-7L8.5 13h7z" fill="#e94560"/>
+  </svg>
+  <div>
+    <h1>JetClock Setup</h1>
+    <p>Guition ESP32-S3-4848S040 &mdash; Flight tracking dashboard</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ── WiFi ─────────────────────────────────────── -->
+  <section>
+    <div class="section-header">Wi-Fi</div>
+    <div class="section-body">
+      <label>
+        <span>Network name (SSID)</span>
+        <input id="wifi_ssid" type="text" autocomplete="off" spellcheck="false" placeholder="MyHomeNetwork">
+      </label>
+      <label>
+        <span>Password</span>
+        <input id="wifi_password" type="password" autocomplete="new-password" placeholder="••••••••">
+      </label>
+    </div>
+  </section>
+
+  <!-- ── Location ──────────────────────────────────── -->
+  <section>
+    <div class="section-header">Location</div>
+    <div class="section-body">
+      <div class="row-2">
+        <label>
+          <span>Latitude</span>
+          <input id="home_lat" type="number" step="0.0001" placeholder="53.6143">
+        </label>
+        <label>
+          <span>Longitude</span>
+          <input id="home_lon" type="number" step="0.0001" placeholder="-1.6485">
+        </label>
+      </div>
+      <div class="row-2">
+        <label>
+          <span>Search radius (nautical miles)</span>
+          <input id="radius_nm" type="number" min="5" max="100" value="30">
+          <small>30 nm ≈ 55 km — keeps traffic manageable</small>
+        </label>
+        <label>
+          <span>Screen facing direction (°)</span>
+          <input id="screen_bearing" type="number" min="0" max="359" value="0">
+          <small>Compass bearing the display front faces</small>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Home Assistant ─────────────────────────────── -->
+  <section>
+    <div class="section-header">Home Assistant</div>
+    <div class="section-body">
+      <div class="ha-test-row">
+        <label>
+          <span>HA URL</span>
+          <input id="ha_url" type="url" placeholder="http://192.168.1.100:8123" autocomplete="off">
+        </label>
+      </div>
+      <label>
+        <span>Long-lived access token</span>
+        <input id="ha_token" type="password" autocomplete="new-password" placeholder="eyJ...">
+        <small>Profile → Security → Long-lived access tokens in HA</small>
+      </label>
+      <button class="btn secondary" onclick="testHa()">Test connection &amp; load entities</button>
+      <div id="ha-status" class="status"></div>
+
+      <label>
+        <span>Temperature sensor <em style="font-weight:400;opacity:0.6">(optional)</em></span>
+        <input id="temp_entity" type="text" placeholder="sensor.outdoor_temperature" autocomplete="off" spellcheck="false">
+      </label>
+      <label>
+        <span>Humidity sensor <em style="font-weight:400;opacity:0.6">(optional)</em></span>
+        <input id="humidity_entity" type="text" placeholder="sensor.outdoor_humidity" autocomplete="off" spellcheck="false">
+      </label>
+    </div>
+  </section>
+
+  <!-- ── Smart home buttons ─────────────────────────── -->
+  <section>
+    <div class="section-header">Smart home buttons (up to 5)</div>
+    <div class="section-body" id="btn-slots">
+      <!-- Slots inserted by JS -->
+    </div>
+  </section>
+
+  <div id="save-status" class="status"></div>
+
+</div><!-- /container -->
+
+<!-- ── Fixed save bar ─────────────────────────────────────────────── -->
+<div id="save-bar">
+  <button class="btn" onclick="saveConfig()">Save &amp; reboot</button>
+  <button class="btn secondary" style="width:auto;flex-shrink:0" onclick="factoryReset()">Reset</button>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const NUM_SLOTS = 5;
+let haEntities = [];  // populated after "Test connection"
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  buildSlots();
+  await loadCurrentConfig();
+});
+
+function buildSlots() {
+  const container = document.getElementById('btn-slots');
+  for (let i = 0; i < NUM_SLOTS; i++) {
+    container.insertAdjacentHTML('beforeend', `
+      <div class="btn-slot" id="slot-${i}">
+        <div class="slot-num">BUTTON ${i + 1}</div>
+        <label>
+          <span>Entity</span>
+          <select id="slot-${i}-entity" onchange="onEntityChange(${i})">
+            <option value="">(none)</option>
+          </select>
+        </label>
+        <label>
+          <span>Label (shown on display)</span>
+          <input id="slot-${i}-label" type="text" placeholder="My Light">
+        </label>
+        <input id="slot-${i}-domain" type="hidden">
+      </div>
+    `);
+  }
+}
+
+async function loadCurrentConfig() {
+  try {
+    const res = await fetch('/config');
+    if (!res.ok) return;
+    const cfg = await res.json();
+    applyConfig(cfg);
+  } catch (e) {
+    // First boot — ignore
+  }
+}
+
+function applyConfig(cfg) {
+  setValue('wifi_ssid',       cfg.wifi_ssid      || '');
+  setValue('wifi_password',   cfg.wifi_password  || '');
+  setValue('home_lat',        cfg.home_lat       || '');
+  setValue('home_lon',        cfg.home_lon       || '');
+  setValue('radius_nm',       cfg.radius_nm      || 30);
+  setValue('screen_bearing',  cfg.screen_bearing || 0);
+  setValue('ha_url',          cfg.ha_url         || '');
+  setValue('ha_token',        cfg.ha_token       || '');
+  setValue('temp_entity',     cfg.temp_entity    || '');
+  setValue('humidity_entity', cfg.humidity_entity|| '');
+
+  const btns = cfg.buttons || [];
+  for (let i = 0; i < NUM_SLOTS; i++) {
+    const b = btns[i] || {};
+    const sel = document.getElementById(`slot-${i}-entity`);
+    // Store as data so we can restore after entity list loads
+    sel.dataset.pending = b.entity_id || '';
+    setValue(`slot-${i}-label`,  b.label  || '');
+    setValue(`slot-${i}-domain`, b.domain || '');
+  }
+}
+
+// ── HA connection test + entity discovery ─────────────────────────────────
+async function testHa() {
+  const url   = val('ha_url').replace(/\/$/, '');
+  const token = val('ha_token');
+  const status = document.getElementById('ha-status');
+
+  if (!url || !token) {
+    showStatus(status, 'err', 'Enter HA URL and token first.');
+    return;
+  }
+
+  showStatus(status, 'info', '<span class="loader"></span> Connecting to Home Assistant…');
+
+  try {
+    const res = await fetch(`${url}/api/states`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+    });
+
+    if (!res.ok) {
+      showStatus(status, 'err', `HA returned ${res.status} — check your token.`);
+      return;
+    }
+
+    const states = await res.json();
+    const toggleable = states.filter(e =>
+      ['light', 'switch', 'input_boolean', 'fan', 'cover', 'scene', 'script']
+        .includes(e.entity_id.split('.')[0])
+    );
+
+    haEntities = toggleable.map(e => ({
+      entity_id: e.entity_id,
+      label: e.attributes?.friendly_name || e.entity_id,
+      domain: e.entity_id.split('.')[0]
+    }));
+
+    haEntities.sort((a, b) => a.label.localeCompare(b.label));
+
+    populateEntitySelects();
+    showStatus(status, 'ok', `✓ Connected — ${haEntities.length} toggleable entities found.`);
+  } catch (e) {
+    showStatus(status, 'err', `Connection failed: ${e.message}. Check HA URL and CORS settings.`);
+  }
+}
+
+function populateEntitySelects() {
+  for (let i = 0; i < NUM_SLOTS; i++) {
+    const sel  = document.getElementById(`slot-${i}-entity`);
+    const pending = sel.dataset.pending || '';
+
+    // Keep (none) option, rebuild the rest
+    while (sel.options.length > 1) sel.remove(1);
+
+    for (const e of haEntities) {
+      const opt = new Option(`${e.label}  (${e.entity_id})`, e.entity_id);
+      sel.add(opt);
+    }
+
+    if (pending) {
+      sel.value = pending;
+      if (sel.value !== pending) {
+        // Entity not in list — add it manually
+        sel.add(new Option(pending, pending));
+        sel.value = pending;
+      }
+      onEntityChange(i);
+    }
+  }
+}
+
+function onEntityChange(i) {
+  const entityId = document.getElementById(`slot-${i}-entity`).value;
+  const domain   = entityId ? entityId.split('.')[0] : '';
+  document.getElementById(`slot-${i}-domain`).value = domain;
+
+  // Auto-fill label from HA entity friendly_name
+  const entity = haEntities.find(e => e.entity_id === entityId);
+  if (entity) {
+    const lbl = document.getElementById(`slot-${i}-label`);
+    if (!lbl.value || lbl.value === lbl.dataset.autofilled) {
+      lbl.value = entity.label;
+      lbl.dataset.autofilled = entity.label;
+    }
+  }
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────
+async function saveConfig() {
+  const status = document.getElementById('save-status');
+  showStatus(status, 'info', '<span class="loader"></span> Saving…');
+
+  const buttons = [];
+  for (let i = 0; i < NUM_SLOTS; i++) {
+    const entity_id = val(`slot-${i}-entity`);
+    if (!entity_id) continue;
+    buttons.push({
+      entity_id,
+      label:  val(`slot-${i}-label`) || entity_id,
+      domain: val(`slot-${i}-domain`) || entity_id.split('.')[0]
+    });
+  }
+
+  const cfg = {
+    wifi_ssid:       val('wifi_ssid'),
+    wifi_password:   val('wifi_password'),
+    home_lat:        parseFloat(val('home_lat'))  || 0,
+    home_lon:        parseFloat(val('home_lon'))  || 0,
+    radius_nm:       parseInt(val('radius_nm'))   || 30,
+    screen_bearing:  parseInt(val('screen_bearing')) || 0,
+    ha_url:          val('ha_url').replace(/\/$/, ''),
+    ha_token:        val('ha_token'),
+    temp_entity:     val('temp_entity'),
+    humidity_entity: val('humidity_entity'),
+    buttons
+  };
+
+  // Basic validation
+  if (!cfg.wifi_ssid) {
+    showStatus(status, 'err', 'Wi-Fi SSID is required.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showStatus(status, 'ok', '✓ Saved! Rebooting — reconnect to your home Wi-Fi and the display will show flight data.');
+    } else {
+      showStatus(status, 'err', 'Save failed: ' + JSON.stringify(data));
+    }
+  } catch (e) {
+    showStatus(status, 'err', 'Save failed: ' + e.message);
+  }
+}
+
+async function factoryReset() {
+  if (!confirm('Erase all settings and return to setup mode?')) return;
+  await fetch('/factory-reset', { method: 'POST' });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function val(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+function setValue(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.value = v;
+}
+function showStatus(el, type, html) {
+  el.className = 'status ' + type;
+  el.innerHTML = html;
+}
+</script>
+</body>
+</html>

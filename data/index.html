@@ -238,7 +238,7 @@
 
       <label>
         <span class="lbl">Home Assistant URL</span>
-        <input id="ha_url" type="url" placeholder="http://192.168.1.100:8123" autocomplete="off">
+        <input id="ha_url" type="url" placeholder="http://homeassistant.local:8123" autocomplete="off">
         <small>Your local HA address — not app.nabu.casa</small>
       </label>
 
@@ -269,9 +269,10 @@
       </label>
 
       <div style="display:flex;gap:10px">
-        <button class="btn ghost" onclick="testHA()">Test &amp; load entities</button>
         <button class="btn" onclick="saveSection('ha')">Save HA settings</button>
+        <button class="btn ghost" onclick="testHA()">Test &amp; load entities</button>
       </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:-4px">Save first, then Test to populate the button entity lists below.</p>
       <div id="status-ha" class="status"></div>
 
     </div>
@@ -341,7 +342,7 @@ function applyConfig(c) {
   setVal('home_lon',       c.home_lon       || '');
   setVal('radius_nm',      c.radius_nm      || 30);
   setVal('screen_bearing', c.screen_bearing || 0);
-  setVal('ha_url',         c.ha_url         || '');
+  setVal('ha_url',         c.ha_url         || 'http://homeassistant.local:8123');
   setVal('ha_token',       c.ha_token       || '');
   setVal('temp_entity',    c.temp_entity    || '');
   setVal('humidity_entity',c.humidity_entity|| '');
@@ -380,22 +381,19 @@ function buildSlots() {
 }
 
 // ── HA test ────────────────────────────────────────────────────────────────
+// Fetches /ha/states — proxied through the device to avoid CORS.
+// Save HA URL + token first so the device has credentials to use.
 async function testHA() {
-  const url   = getVal('ha_url').replace(/\/$/, '');
-  const token = getVal('ha_token');
-  const s     = document.getElementById('status-ha');
-  if (!url || !token || token === '********') {
-    show(s, 'err', 'Enter your HA URL and token first.');
-    return;
-  }
+  const s = document.getElementById('status-ha');
   show(s, 'info', '<span class="spinner"></span> Connecting…');
   try {
-    const r = await fetch(`${url}/api/states`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!r.ok) { show(s, 'err', `HA returned ${r.status} — check your token.`); return; }
-    const states = await r.json();
-    haEntities = states
+    const r = await fetch('/ha/states');
+    const data = await r.json();
+    if (!r.ok) {
+      show(s, 'err', `Failed: ${data.error || 'HTTP ' + r.status}`);
+      return;
+    }
+    haEntities = data
       .filter(e => ['light','switch','input_boolean','fan','cover','scene','script']
         .includes(e.entity_id.split('.')[0]))
       .map(e => ({ entity_id: e.entity_id, label: e.attributes?.friendly_name || e.entity_id,

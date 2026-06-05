@@ -5,6 +5,8 @@
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
 static AsyncWebServer server(80);
 static AppConfig *s_cfg = nullptr;
@@ -92,6 +94,62 @@ void web_server_init(AppConfig &cfg) {
 
     server.on("/status", HTTP_GET, [](AsyncWebServerRequest *req) {
         handle_get_status(req);
+    });
+
+    // Proxy /api/states through the device to avoid browser CORS restrictions.
+    // Uses stored ha_url + ha_token — no credentials needed from the browser.
+    server.on("/ha/states", HTTP_GET, [](AsyncWebServerRequest *req) {
+        if (!s_cfg || s_cfg->ha_url[0] == '\0' || s_cfg->ha_token[0] == '\0') {
+            req->send(400, "application/json",
+                "{\"error\":\"Save HA URL and token first, then click Test.\"}");
+            return;
+        }
+
+        String url = String(s_cfg->ha_url);
+        while (url.endsWith("/")) url.remove(url.length() - 1);
+        url += "/api/states";
+
+        HTTPClient http;
+        WiFiClientSecure secureClient;
+        http.setTimeout(8000);
+        if (url.startsWith("https://")) {
+            secureClient.setInsecure();
+            http.begin(secureClient, url);
+        } else {
+            http.begin(url);
+        }
+        http.addHeader("Authorization", String("Bearer ") + s_cfg->ha_token);
+
+        int code = http.GET();
+        if (code != HTTP_CODE_OK) {
+            http.end();
+            String err = "{\"error\":\"HA returned " + String(code < 0 ? 0 : code) + "\"}";
+            req->send(502, "application/json", err);
+            return;
+        }
+
+        // Stream-parse, keeping only the fields we need for the entity picker.
+        JsonDocument filter;
+        JsonObject fItem = filter.to<JsonArray>().add<JsonObject>();
+        fItem["entity_id"] = true;
+        fItem["state"]     = true;
+        JsonObject fAttrs  = fItem["attributes"].to<JsonObject>();
+        fAttrs["friendly_name"] = true;
+
+        JsonDocument doc;
+        WiFiClient *stream = http.getStreamPtr();
+        DeserializationError derr = deserializeJson(doc, *stream,
+            DeserializationOption::Filter(filter));
+        http.end();
+
+        if (derr) {
+            req->send(500, "application/json", "{\"error\":\"JSON parse error\"}");
+            return;
+        }
+
+        String result;
+        serializeJson(doc, result);
+        req->send(200, "application/json", result);
     });
 
     server.onNotFound([](AsyncWebServerRequest *req) {

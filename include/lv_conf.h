@@ -8,8 +8,9 @@
 /* Color depth: 1 (1 byte per pixel), 8 (RGB332), 16 (RGB565), 32 (ARGB8888) */
 #define LV_COLOR_DEPTH 16
 
-/* Swap the 2 bytes of RGB565 color — mandatory for ST7701S + ESP32-S3 */
-#define LV_COLOR_16_SWAP 1
+/* No byte swap needed: LVGL's native RGB565 bit order (B low, R high)
+   matches the ESP32-S3 RGB panel DMA output with the corrected pin mapping. */
+#define LV_COLOR_16_SWAP 0
 
 /* Enable use of LV_COLOR_CHROMA_KEY for transparency */
 #define LV_COLOR_SCREEN_TRANSP 0

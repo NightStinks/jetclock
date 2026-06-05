@@ -97,23 +97,25 @@ static void panel_init() {
     cfg.vsync_gpio_num             = PIN_VSYNC;
     cfg.de_gpio_num                = PIN_DE;
     cfg.pclk_gpio_num              = PIN_PCLK;
-    // Data pins: R[4:0], G[5:0], B[4:0]
-    cfg.data_gpio_nums[0]  = 11; // R0
-    cfg.data_gpio_nums[1]  = 12; // R1
-    cfg.data_gpio_nums[2]  = 13; // R2
-    cfg.data_gpio_nums[3]  = 14; // R3
-    cfg.data_gpio_nums[4]  = 0;  // R4
+    // Pixel word bit layout: B[4:0]=bits0-4, G[5:0]=bits5-10, R[4:0]=bits11-15
+    // data_gpio_nums[n] maps bit n → the GPIO that the display uses for that channel.
+    // Pin assignments from the working ESPHome YAML (color_order: RGB).
+    cfg.data_gpio_nums[0]  = 4;  // B0
+    cfg.data_gpio_nums[1]  = 5;  // B1
+    cfg.data_gpio_nums[2]  = 6;  // B2
+    cfg.data_gpio_nums[3]  = 7;  // B3
+    cfg.data_gpio_nums[4]  = 15; // B4
     cfg.data_gpio_nums[5]  = 8;  // G0
     cfg.data_gpio_nums[6]  = 20; // G1
     cfg.data_gpio_nums[7]  = 3;  // G2
     cfg.data_gpio_nums[8]  = 46; // G3
     cfg.data_gpio_nums[9]  = 9;  // G4
     cfg.data_gpio_nums[10] = 10; // G5
-    cfg.data_gpio_nums[11] = 4;  // B0
-    cfg.data_gpio_nums[12] = 5;  // B1
-    cfg.data_gpio_nums[13] = 6;  // B2
-    cfg.data_gpio_nums[14] = 7;  // B3
-    cfg.data_gpio_nums[15] = 15; // B4
+    cfg.data_gpio_nums[11] = 11; // R0
+    cfg.data_gpio_nums[12] = 12; // R1
+    cfg.data_gpio_nums[13] = 13; // R2
+    cfg.data_gpio_nums[14] = 14; // R3
+    cfg.data_gpio_nums[15] = 0;  // R4
     cfg.disp_gpio_num      = GPIO_NUM_NC;
     cfg.flags.fb_in_psram  = 1;  // frame buffer lives in PSRAM
 

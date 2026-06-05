@@ -268,11 +268,7 @@
         <input id="humidity_entity" type="text" placeholder="sensor.outdoor_humidity" spellcheck="false">
       </label>
 
-      <div style="display:flex;gap:10px">
-        <button class="btn" onclick="saveSection('ha')">Save HA settings</button>
-        <button class="btn ghost" onclick="testHA()">Test &amp; load entities</button>
-      </div>
-      <p style="font-size:12px;color:var(--muted);margin-top:-4px">Save first, then Test to populate the button entity lists below.</p>
+      <button class="btn" onclick="saveSection('ha')">Save HA settings</button>
       <div id="status-ha" class="status"></div>
 
     </div>
@@ -312,7 +308,6 @@
 
 <script>
 const NUM_SLOTS = 5;
-let haEntities = [];
 
 // ── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -351,10 +346,9 @@ function applyConfig(c) {
   const btns = c.buttons || [];
   for (let i = 0; i < NUM_SLOTS; i++) {
     const b = btns[i] || {};
-    const sel = document.getElementById(`slot-${i}-entity`);
-    sel.dataset.pending = b.entity_id || '';
-    setVal(`slot-${i}-label`,  b.label  || '');
-    setVal(`slot-${i}-domain`, b.domain || '');
+    setVal(`slot-${i}-entity`, b.entity_id || '');
+    setVal(`slot-${i}-label`,  b.label     || '');
+    setVal(`slot-${i}-domain`, b.domain    || (b.entity_id || '').split('.')[0]);
   }
 }
 
@@ -366,68 +360,22 @@ function buildSlots() {
       <div class="slot">
         <div class="slot-num">BUTTON ${i+1}</div>
         <label>
-          <span class="lbl">Entity</span>
-          <select id="slot-${i}-entity" onchange="onEntityChange(${i})">
-            <option value="">(none)</option>
-          </select>
+          <span class="lbl">Entity ID</span>
+          <input id="slot-${i}-entity" type="text" placeholder="light.living_room" spellcheck="false" autocomplete="off" oninput="onEntityChange(${i})">
+          <small>Find in HA → Developer Tools → States</small>
         </label>
         <label>
           <span class="lbl">Label on display</span>
-          <input id="slot-${i}-label" type="text" placeholder="My Light">
+          <input id="slot-${i}-label" type="text" placeholder="Living Room">
         </label>
         <input id="slot-${i}-domain" type="hidden">
       </div>`);
   }
 }
 
-// ── HA test ────────────────────────────────────────────────────────────────
-// Fetches /ha/states — proxied through the device to avoid CORS.
-// Save HA URL + token first so the device has credentials to use.
-async function testHA() {
-  const s = document.getElementById('status-ha');
-  show(s, 'info', '<span class="spinner"></span> Connecting…');
-  try {
-    const r = await fetch('/ha/states');
-    const data = await r.json();
-    if (!r.ok) {
-      show(s, 'err', `Failed: ${data.error || 'HTTP ' + r.status}`);
-      return;
-    }
-    haEntities = data
-      .filter(e => ['light','switch','input_boolean','fan','cover','scene','script']
-        .includes(e.entity_id.split('.')[0]))
-      .map(e => ({ entity_id: e.entity_id, label: e.attributes?.friendly_name || e.entity_id,
-                   domain: e.entity_id.split('.')[0] }))
-      .sort((a,b) => a.label.localeCompare(b.label));
-    populateSelects();
-    show(s, 'ok', `✓ Connected — ${haEntities.length} controllable entities found.`);
-  } catch(e) { show(s, 'err', `Failed: ${e.message}`); }
-}
-
-function populateSelects() {
-  for (let i = 0; i < NUM_SLOTS; i++) {
-    const sel = document.getElementById(`slot-${i}-entity`);
-    const pending = sel.dataset.pending || '';
-    while (sel.options.length > 1) sel.remove(1);
-    haEntities.forEach(e => sel.add(new Option(`${e.label}  (${e.entity_id})`, e.entity_id)));
-    if (pending) {
-      sel.value = pending;
-      if (sel.value !== pending) { sel.add(new Option(pending, pending)); sel.value = pending; }
-      onEntityChange(i);
-    }
-  }
-}
-
 function onEntityChange(i) {
-  const eid = document.getElementById(`slot-${i}-entity`).value;
+  const eid = getVal(`slot-${i}-entity`);
   document.getElementById(`slot-${i}-domain`).value = eid ? eid.split('.')[0] : '';
-  const e = haEntities.find(e => e.entity_id === eid);
-  if (e) {
-    const lbl = document.getElementById(`slot-${i}-label`);
-    if (!lbl.value || lbl.value === lbl.dataset.auto) {
-      lbl.value = e.label; lbl.dataset.auto = e.label;
-    }
-  }
 }
 
 // ── Save sections ──────────────────────────────────────────────────────────

@@ -224,10 +224,22 @@ void setup() {
     }
 
     // Fully configured — start the main app
+    Serial.println("[boot] Building main UI");
     flight_set_home(cfg.home_lat, cfg.home_lon, cfg.radius_nm);
     ui_set_toggle_callback([](int idx) { ha_client_toggle(idx); });
     ui_init(cfg);
+
+    // Flush the freshly-built UI to the panel BEFORE any blocking network
+    // work. Otherwise a slow HA refresh or ADS-B request leaves the screen
+    // black (the framebuffer was cleared to black during display_init).
+    {
+        uint32_t t = millis();
+        for (int i = 0; i < 8; i++) { lvgl_tick_fn(t); delay(20); }
+    }
+    Serial.println("[boot] UI rendered");
+
     ha_client_init(cfg, on_button_state, on_temp, on_humidity);
+    Serial.println("[boot] HA client started");
     poll_flight();
     Serial.println("[boot] Ready");
 }

@@ -5,6 +5,7 @@
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include "index_html_gz.h"
 
 static AsyncWebServer server(80);
 static AppConfig *s_cfg = nullptr;
@@ -73,8 +74,14 @@ void web_server_init(AppConfig &cfg) {
         Serial.println("[web] mDNS: http://jetclock.local");
     }
 
+    // Serve the config page from flash (PROGMEM), gzipped. Streaming the
+    // 15KB file from LittleFS stalls ESPAsyncWebServer on weak/high-latency
+    // links; an in-memory gzipped response (~4KB) is fast and reliable.
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
-        req->send(LittleFS, "/index.html", "text/html");
+        AsyncWebServerResponse *resp =
+            req->beginResponse_P(200, "text/html", index_html_gz, index_html_gz_len);
+        resp->addHeader("Content-Encoding", "gzip");
+        req->send(resp);
     });
 
     server.on("/config", HTTP_GET, [](AsyncWebServerRequest *req) {

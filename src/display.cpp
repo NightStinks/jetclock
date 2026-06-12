@@ -95,7 +95,6 @@ static const uint8_t ST7701S_INIT[] = {
     0xFF, 5, 0x77, 0x01, 0x00, 0x00, 0x13,    // CMD2 BK3
     0xE5, 1, 0xE4,
     0x3A, 1, 0x60,
-    0xCD, 1, 0x00,                            // Guition 4848S040 override (16-bit bus)
 };
 
 static void st7701s_init() {
@@ -122,10 +121,16 @@ static void st7701s_init() {
     static const uint8_t bk0[] = {0x77, 0x01, 0x00, 0x00, 0x10};
     lcd_send_cmd(0xFF, bk0, sizeof(bk0));
 
-    static const uint8_t sdir = 0x04;   // SDIR: mirror_x
+    // Guition 4848S040 override — MUST be on page BK0 (after the re-select
+    // above), exactly as the reference YAML does it. Sets the 16-bit RGB
+    // pixel format; the preset leaves BK0 0xCD at 0x08 which mismaps colours.
+    static const uint8_t cd0 = 0x00;
+    lcd_send_cmd(0xCD, &cd0, 1);
+
+    static const uint8_t sdir = 0x00;   // SDIR: no mirror_x
     lcd_send_cmd(0xC7, &sdir, 1);
 
-    static const uint8_t madctl = 0x10; // MADCTL: RGB order + mirror_y
+    static const uint8_t madctl = 0x00; // MADCTL: RGB order, no mirror_y
     lcd_send_cmd(0x36, &madctl, 1);
 
     lcd_send_cmd(0x20, nullptr, 0);     // INVERT OFF

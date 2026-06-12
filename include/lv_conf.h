@@ -8,8 +8,8 @@
 /* Color depth: 1 (1 byte per pixel), 8 (RGB332), 16 (RGB565), 32 (ARGB8888) */
 #define LV_COLOR_DEPTH 16
 
-/* No byte swap needed: LVGL's native RGB565 bit order (B low, R high)
-   matches the ESP32-S3 RGB panel DMA output with the corrected pin mapping. */
+/* Native little-endian RGB565 — keeps the 6-bit green field intact.
+   (SWAP=1 splits green across the byte boundary and scrambles colours.) */
 #define LV_COLOR_16_SWAP 0
 
 /* Enable use of LV_COLOR_CHROMA_KEY for transparency */

@@ -34,17 +34,21 @@ bool config_load(AppConfig &cfg) {
     prefs.getString("temp_entity",   cfg.temp_entity,   sizeof(cfg.temp_entity));
     prefs.getString("hum_entity",    cfg.humidity_entity, sizeof(cfg.humidity_entity));
 
-    cfg.num_buttons = prefs.getInt("num_buttons", 0);
-    if (cfg.num_buttons > MAX_BUTTONS) cfg.num_buttons = MAX_BUTTONS;
+    cfg.num_slots = prefs.getInt("num_slots", 0);
+    if (cfg.num_slots > MAX_SLOTS) cfg.num_slots = MAX_SLOTS;
 
-    for (int i = 0; i < cfg.num_buttons; i++) {
-        char key[20];
-        snprintf(key, sizeof(key), "btn%d_eid", i);
-        prefs.getString(key, cfg.buttons[i].entity_id, sizeof(cfg.buttons[i].entity_id));
-        snprintf(key, sizeof(key), "btn%d_lbl", i);
-        prefs.getString(key, cfg.buttons[i].label, sizeof(cfg.buttons[i].label));
-        snprintf(key, sizeof(key), "btn%d_dom", i);
-        prefs.getString(key, cfg.buttons[i].domain, sizeof(cfg.buttons[i].domain));
+    for (int i = 0; i < cfg.num_slots; i++) {
+        char key[16];
+        SlotConfig &s = cfg.slots[i];
+        snprintf(key, sizeof(key), "s%d_type", i); s.type = (uint8_t)prefs.getInt(key, CARD_EMPTY);
+        snprintf(key, sizeof(key), "s%d_eid",  i); prefs.getString(key, s.entity_id, sizeof(s.entity_id));
+        snprintf(key, sizeof(key), "s%d_lbl",  i); prefs.getString(key, s.label,     sizeof(s.label));
+        snprintf(key, sizeof(key), "s%d_dom",  i); prefs.getString(key, s.domain,    sizeof(s.domain));
+        snprintf(key, sizeof(key), "s%d_svc",  i); prefs.getString(key, s.service,   sizeof(s.service));
+        snprintf(key, sizeof(key), "s%d_attr", i); prefs.getString(key, s.attribute, sizeof(s.attribute));
+        snprintf(key, sizeof(key), "s%d_unit", i); prefs.getString(key, s.unit,      sizeof(s.unit));
+        snprintf(key, sizeof(key), "s%d_min",  i); s.min_val = (int16_t)prefs.getInt(key, 0);
+        snprintf(key, sizeof(key), "s%d_max",  i); s.max_val = (int16_t)prefs.getInt(key, 100);
     }
 
     prefs.end();
@@ -66,16 +70,20 @@ void config_save(const AppConfig &cfg) {
     prefs.putString("ha_token",  cfg.ha_token);
     prefs.putString("temp_entity",  cfg.temp_entity);
     prefs.putString("hum_entity",   cfg.humidity_entity);
-    prefs.putInt("num_buttons",  cfg.num_buttons);
+    prefs.putInt("num_slots",  cfg.num_slots);
 
-    for (int i = 0; i < cfg.num_buttons; i++) {
-        char key[20];
-        snprintf(key, sizeof(key), "btn%d_eid", i);
-        prefs.putString(key, cfg.buttons[i].entity_id);
-        snprintf(key, sizeof(key), "btn%d_lbl", i);
-        prefs.putString(key, cfg.buttons[i].label);
-        snprintf(key, sizeof(key), "btn%d_dom", i);
-        prefs.putString(key, cfg.buttons[i].domain);
+    for (int i = 0; i < cfg.num_slots; i++) {
+        char key[16];
+        const SlotConfig &s = cfg.slots[i];
+        snprintf(key, sizeof(key), "s%d_type", i); prefs.putInt(key, s.type);
+        snprintf(key, sizeof(key), "s%d_eid",  i); prefs.putString(key, s.entity_id);
+        snprintf(key, sizeof(key), "s%d_lbl",  i); prefs.putString(key, s.label);
+        snprintf(key, sizeof(key), "s%d_dom",  i); prefs.putString(key, s.domain);
+        snprintf(key, sizeof(key), "s%d_svc",  i); prefs.putString(key, s.service);
+        snprintf(key, sizeof(key), "s%d_attr", i); prefs.putString(key, s.attribute);
+        snprintf(key, sizeof(key), "s%d_unit", i); prefs.putString(key, s.unit);
+        snprintf(key, sizeof(key), "s%d_min",  i); prefs.putInt(key, s.min_val);
+        snprintf(key, sizeof(key), "s%d_max",  i); prefs.putInt(key, s.max_val);
     }
 
     prefs.end();
@@ -105,12 +113,19 @@ void config_to_json(const AppConfig &cfg, JsonDocument &doc, bool mask_secrets) 
     doc["temp_entity"]    = cfg.temp_entity;
     doc["humidity_entity"] = cfg.humidity_entity;
 
-    JsonArray btns = doc["buttons"].to<JsonArray>();
-    for (int i = 0; i < cfg.num_buttons; i++) {
-        JsonObject b = btns.add<JsonObject>();
-        b["entity_id"] = cfg.buttons[i].entity_id;
-        b["label"]     = cfg.buttons[i].label;
-        b["domain"]    = cfg.buttons[i].domain;
+    JsonArray slots = doc["slots"].to<JsonArray>();
+    for (int i = 0; i < cfg.num_slots; i++) {
+        const SlotConfig &s = cfg.slots[i];
+        JsonObject o = slots.add<JsonObject>();
+        o["type"]      = s.type;
+        o["entity_id"] = s.entity_id;
+        o["label"]     = s.label;
+        o["domain"]    = s.domain;
+        o["service"]   = s.service;
+        o["attribute"] = s.attribute;
+        o["unit"]      = s.unit;
+        o["min"]       = s.min_val;
+        o["max"]       = s.max_val;
     }
 }
 
@@ -130,14 +145,27 @@ bool config_from_json(const JsonDocument &doc, AppConfig &cfg) {
     strlcpy(cfg.temp_entity,     doc["temp_entity"]     | "", sizeof(cfg.temp_entity));
     strlcpy(cfg.humidity_entity, doc["humidity_entity"] | "", sizeof(cfg.humidity_entity));
 
-    JsonArrayConst btns = doc["buttons"].as<JsonArrayConst>();
-    cfg.num_buttons = 0;
-    for (JsonObjectConst b : btns) {
-        if (cfg.num_buttons >= MAX_BUTTONS) break;
-        int i = cfg.num_buttons++;
-        strlcpy(cfg.buttons[i].entity_id, b["entity_id"] | "", sizeof(cfg.buttons[i].entity_id));
-        strlcpy(cfg.buttons[i].label,     b["label"]     | "", sizeof(cfg.buttons[i].label));
-        strlcpy(cfg.buttons[i].domain,    b["domain"]    | "", sizeof(cfg.buttons[i].domain));
+    JsonArrayConst slots = doc["slots"].as<JsonArrayConst>();
+    cfg.num_slots = 0;
+    for (JsonObjectConst o : slots) {
+        if (cfg.num_slots >= MAX_SLOTS) break;
+        SlotConfig &s = cfg.slots[cfg.num_slots++];
+        memset(&s, 0, sizeof(s));
+        s.type = (uint8_t)(o["type"] | (int)CARD_TOGGLE);
+        strlcpy(s.entity_id, o["entity_id"] | "", sizeof(s.entity_id));
+        strlcpy(s.label,     o["label"]     | "", sizeof(s.label));
+        strlcpy(s.domain,    o["domain"]    | "", sizeof(s.domain));
+        strlcpy(s.service,   o["service"]   | "", sizeof(s.service));
+        strlcpy(s.attribute, o["attribute"] | "", sizeof(s.attribute));
+        strlcpy(s.unit,      o["unit"]      | "", sizeof(s.unit));
+        s.min_val = (int16_t)(o["min"] | 0);
+        s.max_val = (int16_t)(o["max"] | 100);
+        // Derive domain from entity_id if not supplied
+        if (s.domain[0] == '\0' && s.entity_id[0]) {
+            const char *dot = strchr(s.entity_id, '.');
+            if (dot) { size_t n = dot - s.entity_id; if (n >= sizeof(s.domain)) n = sizeof(s.domain) - 1;
+                       memcpy(s.domain, s.entity_id, n); s.domain[n] = '\0'; }
+        }
     }
 
     return cfg.wifi_ssid[0] != '\0';

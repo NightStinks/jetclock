@@ -90,7 +90,9 @@ static void poll_flight() {
 
 // ── HA callbacks ──────────────────────────────────────────────────────────
 
-static void on_button_state(int i, bool on)  { ui_set_button_state(i, on); }
+static void on_slot_state(int i, const char *state, float value, bool has_value) {
+    ui_set_slot_state(i, state, value, has_value);
+}
 static void on_temp(float c)                  { ui_set_temp(c); }
 static void on_humidity(float p)              { ui_set_humidity(p); }
 
@@ -226,7 +228,8 @@ void setup() {
     // Fully configured — start the main app
     Serial.println("[boot] Building main UI");
     flight_set_home(cfg.home_lat, cfg.home_lon, cfg.radius_nm);
-    ui_set_toggle_callback([](int idx) { ha_client_toggle(idx); });
+    ui_set_slot_callbacks([](int idx) { ha_client_activate(idx); },
+                          [](int idx, int v) { ha_client_set_value(idx, v); });
     ui_init(cfg);
 
     // Flush the freshly-built UI to the panel BEFORE any blocking network
@@ -238,7 +241,7 @@ void setup() {
     }
     Serial.println("[boot] UI rendered");
 
-    ha_client_init(cfg, on_button_state, on_temp, on_humidity);
+    ha_client_init(cfg, on_slot_state, on_temp, on_humidity);
     Serial.println("[boot] HA client started");
     poll_flight();
     Serial.println("[boot] Ready");

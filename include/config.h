@@ -2,14 +2,43 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
-#define MAX_BUTTONS 5
-#define CONFIG_VERSION 1
+#define MAX_SLOTS 5
+#define MAX_BUTTONS MAX_SLOTS   // legacy alias
+#define CONFIG_VERSION 2
 
-struct ButtonConfig {
-    char entity_id[64];
-    char label[32];
-    char domain[20];  // "switch", "light", "input_boolean", etc.
+// Card type for a side-panel slot. Append new types at the end — the numeric
+// values are persisted in NVS and sent over JSON, so don't reorder.
+enum CardType : uint8_t {
+    CARD_EMPTY = 0,
+    CARD_TOGGLE,    // on/off: switch, light, input_boolean, fan
+    CARD_SLIDER,    // 0–100 drag: light brightness, fan %, cover position
+    CARD_SENSOR,    // read-only value + unit
+    CARD_ACTION,    // momentary: scene, script, automation, button press
+    CARD_COVER,     // open / stop / close (+ position)
+    CARD_LIGHT,     // on/off + brightness (+ colour temp)
+    CARD_CLIMATE,   // setpoint up/down + state
+    CARD_LOCK,      // lock / unlock
+    CARD_SELECT,    // option select (select / input_select)
+    CARD_TYPE_COUNT
 };
+
+// One configurable card. Generic fields cover every card type; each type
+// interprets the ones it needs (e.g. SLIDER uses min/max/attribute/service,
+// SENSOR uses attribute/unit, ACTION uses service).
+struct SlotConfig {
+    uint8_t type;          // CardType
+    char    entity_id[64];
+    char    label[24];
+    char    domain[16];    // derived from entity_id ("light", "cover", …)
+    char    service[40];   // explicit "domain.service" (ACTION / overrides)
+    char    attribute[24]; // state attribute to read (brightness, current_position…)
+    char    unit[10];      // SENSOR display unit suffix
+    int16_t min_val;       // SLIDER range min (default 0)
+    int16_t max_val;       // SLIDER range max (default 100)
+};
+
+// Legacy name kept so older call sites still compile during migration.
+typedef SlotConfig ButtonConfig;
 
 struct AppConfig {
     int version;
@@ -32,9 +61,9 @@ struct AppConfig {
     char temp_entity[64];
     char humidity_entity[64];
 
-    // Smart home buttons
-    ButtonConfig buttons[MAX_BUTTONS];
-    int num_buttons;
+    // Side-panel cards
+    SlotConfig slots[MAX_SLOTS];
+    int num_slots;
 };
 
 // Zero-fill cfg and apply factory defaults.

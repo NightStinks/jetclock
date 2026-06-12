@@ -275,15 +275,15 @@
   </section>
 
   <!-- Smart home buttons -->
-  <section id="sec-buttons">
+  <section id="sec-slots">
     <div class="section-title">
-      Smart home buttons (up to 5)
-      <span class="saved-badge" id="badge-buttons">Saved</span>
+      Side-panel cards (5 slots)
+      <span class="saved-badge" id="badge-slots">Saved</span>
     </div>
     <div class="section-body">
       <div class="slots" id="slots"></div>
-      <button class="btn" onclick="saveSection('buttons')">Save buttons</button>
-      <div id="status-buttons" class="status"></div>
+      <button class="btn" onclick="saveSection('slots')">Save cards</button>
+      <div id="status-slots" class="status"></div>
     </div>
   </section>
 
@@ -343,39 +343,86 @@ function applyConfig(c) {
   setVal('humidity_entity',c.humidity_entity|| '');
   setVal('wifi_ssid',      c.wifi_ssid      || '');
 
-  const btns = c.buttons || [];
+  const slots = c.slots || [];
   for (let i = 0; i < NUM_SLOTS; i++) {
-    const b = btns[i] || {};
-    setVal(`slot-${i}-entity`, b.entity_id || '');
-    setVal(`slot-${i}-label`,  b.label     || '');
-    setVal(`slot-${i}-domain`, b.domain    || (b.entity_id || '').split('.')[0]);
+    const s = slots[i] || {};
+    setVal(`slot-${i}-type`,    s.type ?? 0);
+    setVal(`slot-${i}-entity`,  s.entity_id || '');
+    setVal(`slot-${i}-label`,   s.label     || '');
+    setVal(`slot-${i}-service`, s.service   || '');
+    setVal(`slot-${i}-attr`,    s.attribute || '');
+    setVal(`slot-${i}-unit`,    s.unit      || '');
+    setVal(`slot-${i}-min`,     s.min ?? 0);
+    setVal(`slot-${i}-max`,     s.max ?? 100);
+    onSlotType(i);
   }
 }
 
 // ── Slots ─────────────────────────────────────────────────────────────────
+// Card type values must match the CardType enum in config.h.
+const CARD_TYPES = [
+  [0, '— Empty —'],
+  [1, 'Toggle (switch / plug / light)'],
+  [2, 'Slider (brightness / position)'],
+  [3, 'Sensor (read-only value)'],
+  [4, 'Action (scene / script / button)'],
+  [5, 'Cover (blind / garage)'],
+  [6, 'Light (on/off + brightness)'],
+  [7, 'Climate (thermostat)'],
+  [8, 'Lock'],
+  [9, 'Option select'],
+];
+
 function buildSlots() {
   const c = document.getElementById('slots');
   for (let i = 0; i < NUM_SLOTS; i++) {
+    const opts = CARD_TYPES.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
     c.insertAdjacentHTML('beforeend', `
       <div class="slot">
-        <div class="slot-num">BUTTON ${i+1}</div>
+        <div class="slot-num">SLOT ${i+1}</div>
         <label>
-          <span class="lbl">Entity ID</span>
-          <input id="slot-${i}-entity" type="text" placeholder="light.living_room" spellcheck="false" autocomplete="off" oninput="onEntityChange(${i})">
-          <small>Find in HA → Developer Tools → States</small>
+          <span class="lbl">Card type</span>
+          <select id="slot-${i}-type" onchange="onSlotType(${i})">${opts}</select>
         </label>
-        <label>
-          <span class="lbl">Label on display</span>
-          <input id="slot-${i}-label" type="text" placeholder="Living Room">
-        </label>
-        <input id="slot-${i}-domain" type="hidden">
+        <div id="slot-${i}-body">
+          <label>
+            <span class="lbl">Entity ID</span>
+            <input id="slot-${i}-entity" type="text" placeholder="light.living_room" spellcheck="false" autocomplete="off">
+            <small>Find in HA → Developer Tools → States</small>
+          </label>
+          <label>
+            <span class="lbl">Label on display</span>
+            <input id="slot-${i}-label" type="text" placeholder="Living Room">
+          </label>
+          <div class="row2 slot-x-slider" id="slot-${i}-x-slider" style="display:none">
+            <label><span class="lbl">Min</span><input id="slot-${i}-min" type="number" value="0"></label>
+            <label><span class="lbl">Max</span><input id="slot-${i}-max" type="number" value="100"></label>
+          </div>
+          <div class="slot-x-sensor" id="slot-${i}-x-sensor" style="display:none">
+            <div class="row2">
+              <label><span class="lbl">Unit</span><input id="slot-${i}-unit" type="text" placeholder="°C  %  min"></label>
+              <label><span class="lbl">Attribute <em style="font-weight:400;opacity:.6">(optional)</em></span><input id="slot-${i}-attr" type="text" placeholder="leave blank for state"></label>
+            </div>
+          </div>
+          <label class="slot-x-action" id="slot-${i}-x-action" style="display:none">
+            <span class="lbl">Service override <em style="font-weight:400;opacity:.6">(optional)</em></span>
+            <input id="slot-${i}-service" type="text" placeholder="script.turn_on">
+            <small>Defaults are inferred from the entity domain.</small>
+          </label>
+        </div>
       </div>`);
   }
 }
 
-function onEntityChange(i) {
-  const eid = getVal(`slot-${i}-entity`);
-  document.getElementById(`slot-${i}-domain`).value = eid ? eid.split('.')[0] : '';
+// Show only the extra fields relevant to the chosen card type, and hide the
+// entity/label rows entirely for Empty slots.
+function onSlotType(i) {
+  const t = parseInt(getVal(`slot-${i}-type`)) || 0;
+  document.getElementById(`slot-${i}-body`).style.display = (t === 0) ? 'none' : '';
+  const show = (sel, on) => document.getElementById(`slot-${i}-x-${sel}`).style.display = on ? '' : 'none';
+  show('slider', t === 2);
+  show('sensor', t === 3);
+  show('action', t === 4);
 }
 
 // ── Save sections ──────────────────────────────────────────────────────────
@@ -399,18 +446,25 @@ async function saveSection(section) {
       temp_entity:     getVal('temp_entity'),
       humidity_entity: getVal('humidity_entity'),
     };
-  } else if (section === 'buttons') {
-    const buttons = [];
+  } else if (section === 'slots') {
+    const slots = [];
     for (let i = 0; i < NUM_SLOTS; i++) {
-      const eid = getVal(`slot-${i}-entity`);
-      if (!eid) continue;
-      buttons.push({
+      const type = parseInt(getVal(`slot-${i}-type`)) || 0;
+      const eid  = getVal(`slot-${i}-entity`);
+      if (type === 0 || !eid) { slots.push({ type: 0 }); continue; }
+      slots.push({
+        type,
         entity_id: eid,
-        label:     getVal(`slot-${i}-label`) || eid,
-        domain:    getVal(`slot-${i}-domain`) || eid.split('.')[0],
+        label:     getVal(`slot-${i}-label`) || eid.split('.')[1] || eid,
+        domain:    eid.split('.')[0],
+        service:   getVal(`slot-${i}-service`),
+        attribute: getVal(`slot-${i}-attr`),
+        unit:      getVal(`slot-${i}-unit`),
+        min:       parseInt(getVal(`slot-${i}-min`)) || 0,
+        max:       parseInt(getVal(`slot-${i}-max`)) || 100,
       });
     }
-    payload = { buttons };
+    payload = { slots };
   }
 
   try {

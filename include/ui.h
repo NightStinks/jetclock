@@ -24,12 +24,15 @@ struct FlightData {
 };
 void ui_set_flight(const FlightData &f, int screen_bearing_deg);
 
-// Button state — index 0..4
-void ui_set_button_state(int idx, bool on);
+// Update a slot card from HA state. `state` is the raw HA state string;
+// `value`/`has_value` carry the numeric reading (brightness %, position, sensor
+// value). Each card type uses what it needs.
+void ui_set_slot_state(int idx, const char *state, float value, bool has_value);
 
 // Apply a theme by name ("Warm Brown", "Midnight", "Forest", "iOS")
 void ui_apply_theme(const char *theme_name);
 
-// Register the function to call when a button is tapped.
-// Must be set before ui_init() creates buttons, or buttons won't be clickable.
-void ui_set_toggle_callback(void (*cb)(int button_idx));
+// Register callbacks for slot interactions. Set before ui_init().
+//  - activate: a toggle/action/cover/lock card was tapped.
+//  - set_value: a slider card was dragged to `value` (0–100).
+void ui_set_slot_callbacks(void (*activate)(int idx), void (*set_value)(int idx, int value));

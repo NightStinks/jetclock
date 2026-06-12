@@ -26,9 +26,16 @@ static lv_obj_t *lbl_distance;
 static lv_obj_t *img_direction_arrow;
 static lv_obj_t *arrow_container;
 
-// Smart home buttons (5 slots)
-static lv_obj_t *btn_objs[MAX_BUTTONS];
-static lv_obj_t *btn_labels[MAX_BUTTONS];
+// Side-panel slot cards (5 slots). Widgets present depend on card type.
+struct SlotWidgets {
+    uint8_t   type;
+    lv_obj_t *container;
+    lv_obj_t *label;    // card name
+    lv_obj_t *value;    // state/value text (toggle state, sensor reading, slider %)
+    lv_obj_t *slider;   // slider cards only
+};
+static SlotWidgets s_slots[MAX_SLOTS];
+static int         s_slot_idx[MAX_SLOTS];  // stable user_data for event callbacks
 
 // Radar page
 static lv_obj_t *p2_lbl_callsign;
@@ -36,9 +43,11 @@ static lv_obj_t *p2_lbl_origin;
 static lv_obj_t *p2_lbl_dest;
 static lv_obj_t *p2_img_plane;
 
-static void (*s_toggle_cb)(int) = nullptr;
+static void (*s_activate_cb)(int) = nullptr;
+static void (*s_value_cb)(int, int) = nullptr;
 
 // Cached config
+static AppConfig s_cfg;
 static int   s_screen_bearing = 0;
 static float s_bearing_deg    = 0.0f;
 static float s_distance_km    = 0.0f;
@@ -92,6 +101,8 @@ static lv_obj_t *make_rect(lv_obj_t *parent, int x, int y, int w, int h,
 }
 
 // ── Page 1 — Main ─────────────────────────────────────────────────────────
+
+static void build_slot(const AppConfig &cfg, int i, int y);
 
 static void build_page_main(const AppConfig &cfg) {
     page_main = lv_obj_create(lv_scr_act());
@@ -153,45 +164,88 @@ static void build_page_main(const AppConfig &cfg) {
     lv_img_set_pivot(img_direction_arrow, 40, 40);
     lv_img_set_antialias(img_direction_arrow, true);
 
-    // ── Right: Smart home buttons ────────────────────────────────────────
-    static const int btn_y[MAX_BUTTONS] = {76, 158, 240, 322, 404};
+    // ── Right: Slot cards ────────────────────────────────────────────────
+    static const int slot_y[MAX_SLOTS] = {76, 158, 240, 322, 404};
+    for (int i = 0; i < MAX_SLOTS; i++) build_slot(cfg, i, slot_y[i]);
+}
 
-    for (int i = 0; i < MAX_BUTTONS; i++) {
-        const char *lbl_text = (i < cfg.num_buttons && cfg.buttons[i].label[0])
-                               ? cfg.buttons[i].label : "";
+// Build one slot card (170x76 at x=302) according to its card type.
+static void build_slot(const AppConfig &cfg, int i, int y) {
+    s_slot_idx[i] = i;
+    SlotWidgets &w = s_slots[i];
+    memset(&w, 0, sizeof(w));
+    uint8_t type = (i < cfg.num_slots) ? cfg.slots[i].type : CARD_EMPTY;
+    const char *name = (i < cfg.num_slots && cfg.slots[i].label[0]) ? cfg.slots[i].label : "";
+    bool configured = (i < cfg.num_slots && cfg.slots[i].entity_id[0]);
+    w.type = type;
 
-        lv_obj_t *btn = lv_obj_create(page_main);
-        lv_obj_set_pos(btn, 302, btn_y[i]);
-        lv_obj_set_size(btn, 170, 76);
-        lv_obj_set_style_bg_color(btn, s_theme.card, 0);
-        lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_color(btn, s_theme.border, 0);
-        lv_obj_set_style_border_width(btn, 1, 0);
-        lv_obj_set_style_radius(btn, 12, 0);
-        lv_obj_set_style_pad_all(btn, 0, 0);
-        lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *card = lv_obj_create(page_main);
+    lv_obj_set_pos(card, 302, y);
+    lv_obj_set_size(card, 170, 76);
+    lv_obj_set_style_bg_color(card, s_theme.card, 0);
+    lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(card, s_theme.border, 0);
+    lv_obj_set_style_border_width(card, 1, 0);
+    lv_obj_set_style_radius(card, 12, 0);
+    lv_obj_set_style_pad_all(card, 0, 0);
+    lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    w.container = card;
 
-        // Only clickable if a slot is configured
-        if (i < cfg.num_buttons && cfg.buttons[i].entity_id[0]) {
-            lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
-            int *idx_ptr = new int(i);
-            lv_obj_add_event_cb(btn, [](lv_event_t *e) {
-                if (s_toggle_cb) s_toggle_cb(*(int *)lv_event_get_user_data(e));
-            }, LV_EVENT_CLICKED, idx_ptr);
+    if (type == CARD_EMPTY || !configured) {
+        if (name[0]) {
+            lv_obj_t *lbl = make_label(card, 0, 0, 162, name, &lv_font_montserrat_16,
+                                       s_theme.sec, LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
+            lv_obj_center(lbl);
+            w.label = lbl;
         }
-
-        lv_obj_t *lbl = lv_label_create(btn);
-        lv_obj_align(lbl, LV_ALIGN_CENTER, 0, 0);
-        lv_label_set_text(lbl, lbl_text);
-        lv_obj_set_width(lbl, 162);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
-        lv_obj_set_style_text_color(lbl, s_theme.sec, 0);
-        lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-        lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
-
-        btn_objs[i]   = btn;
-        btn_labels[i] = lbl;
+        return;
     }
+
+    if (type == CARD_SLIDER) {
+        // Name top-left, value top-right, slider across the bottom.
+        w.label = make_label(card, 10, 8, 100, name, &lv_font_montserrat_14, s_theme.sec,
+                             LV_TEXT_ALIGN_LEFT, LV_LABEL_LONG_DOT);
+        w.value = make_label(card, 110, 8, 50, "--%", &lv_font_montserrat_14, s_theme.pri,
+                             LV_TEXT_ALIGN_RIGHT);
+        lv_obj_t *sl = lv_slider_create(card);
+        lv_obj_set_size(sl, 148, 12);
+        lv_obj_set_pos(sl, 10, 44);
+        lv_slider_set_range(sl, 0, 100);
+        lv_obj_set_style_bg_color(sl, s_theme.border, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(sl, s_theme.accent, LV_PART_INDICATOR);
+        lv_obj_set_style_bg_color(sl, s_theme.pri, LV_PART_KNOB);
+        lv_obj_add_event_cb(sl, [](lv_event_t *e) {
+            int idx = *(int *)lv_event_get_user_data(e);
+            int v = lv_slider_get_value(lv_event_get_target(e));
+            if (s_slots[idx].value) {
+                char b[8]; snprintf(b, sizeof(b), "%d%%", v);
+                lv_label_set_text(s_slots[idx].value, b);
+            }
+            if (s_value_cb) s_value_cb(idx, v);
+        }, LV_EVENT_RELEASED, &s_slot_idx[i]);
+        w.slider = sl;
+        return;
+    }
+
+    if (type == CARD_SENSOR) {
+        // Small name on top, big value below.
+        w.label = make_label(card, 8, 10, 154, name, &lv_font_montserrat_12, s_theme.sec,
+                             LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
+        w.value = make_label(card, 8, 32, 154, "--", &lv_font_montserrat_24, s_theme.pri,
+                             LV_TEXT_ALIGN_CENTER);
+        return;
+    }
+
+    // Tappable cards: TOGGLE / LIGHT / ACTION / COVER / LOCK / SELECT / CLIMATE
+    lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(card, [](lv_event_t *e) {
+        if (s_activate_cb) s_activate_cb(*(int *)lv_event_get_user_data(e));
+    }, LV_EVENT_CLICKED, &s_slot_idx[i]);
+
+    w.label = make_label(card, 6, 14, 158, name, &lv_font_montserrat_16, s_theme.sec,
+                         LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
+    w.value = make_label(card, 6, 44, 158, "", &lv_font_montserrat_14, s_theme.accent,
+                         LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
 }
 
 // ── Page 2 — Radar ────────────────────────────────────────────────────────
@@ -287,6 +341,7 @@ static void build_page_radar() {
 // ── Public API ─────────────────────────────────────────────────────────────
 
 void ui_init(const AppConfig &cfg) {
+    s_cfg = cfg;
     s_screen_bearing = cfg.screen_bearing;
     lv_disp_t *disp  = lv_disp_get_default();
     lv_disp_set_bg_color(disp, lv_color_hex(0x000000));
@@ -370,16 +425,49 @@ void ui_set_flight(const FlightData &f, int screen_bearing_deg) {
     }
 }
 
-void ui_set_button_state(int idx, bool on) {
-    if (idx < 0 || idx >= MAX_BUTTONS || !btn_objs[idx]) return;
-    lv_color_t bg_col  = on ? s_theme.sec  : s_theme.card;
-    lv_color_t txt_col = on ? s_theme.pri  : s_theme.sec;
-    lv_obj_set_style_bg_color(btn_objs[idx],   bg_col,  0);
-    lv_obj_set_style_text_color(btn_labels[idx], txt_col, 0);
+void ui_set_slot_state(int idx, const char *state, float value, bool has_value) {
+    if (idx < 0 || idx >= MAX_SLOTS) return;
+    SlotWidgets &w = s_slots[idx];
+    if (!w.container) return;
+
+    bool on = state && (strcmp(state, "on") == 0 || strcmp(state, "open") == 0
+                || strcmp(state, "unlocked") == 0 || strcmp(state, "home") == 0
+                || strcmp(state, "playing") == 0);
+
+    switch (w.type) {
+    case CARD_SLIDER:
+        if (has_value) {
+            int v = (int)(value + 0.5f);
+            if (w.slider) lv_slider_set_value(w.slider, v, LV_ANIM_OFF);
+            if (w.value) { char b[8]; snprintf(b, sizeof(b), "%d%%", v); lv_label_set_text(w.value, b); }
+        }
+        break;
+
+    case CARD_SENSOR:
+        if (w.value) {
+            char b[24];
+            const SlotConfig *sc = (idx < s_cfg.num_slots) ? &s_cfg.slots[idx] : nullptr;
+            if (has_value && sc && sc->unit[0])
+                snprintf(b, sizeof(b), "%g%s", value, sc->unit);
+            else if (state && state[0])
+                strlcpy(b, state, sizeof(b));
+            else strlcpy(b, "--", sizeof(b));
+            lv_label_set_text(w.value, b);
+        }
+        break;
+
+    default:
+        // Tappable cards: tint the card by on/off and show the state word.
+        lv_obj_set_style_bg_color(w.container, on ? s_theme.sec : s_theme.card, 0);
+        if (w.label) lv_obj_set_style_text_color(w.label, on ? s_theme.pri : s_theme.sec, 0);
+        if (w.value && state) lv_label_set_text(w.value, on ? "ON" : (state[0] ? state : ""));
+        break;
+    }
 }
 
-void ui_set_toggle_callback(void (*cb)(int button_idx)) {
-    s_toggle_cb = cb;
+void ui_set_slot_callbacks(void (*activate)(int idx), void (*set_value)(int idx, int value)) {
+    s_activate_cb = activate;
+    s_value_cb    = set_value;
 }
 
 void ui_apply_theme(const char *name) {
@@ -429,10 +517,10 @@ void ui_apply_theme(const char *name) {
     lv_obj_set_style_text_color(lbl_dest,     s_theme.pri, 0);
     lv_obj_set_style_text_color(lbl_distance, s_theme.sec, 0);
 
-    for (int i = 0; i < MAX_BUTTONS; i++) {
-        if (!btn_objs[i]) continue;
-        lv_obj_set_style_bg_color(btn_objs[i], s_theme.card, 0);
-        lv_obj_set_style_border_color(btn_objs[i], s_theme.border, 0);
-        lv_obj_set_style_text_color(btn_labels[i], s_theme.sec, 0);
+    for (int i = 0; i < MAX_SLOTS; i++) {
+        if (!s_slots[i].container) continue;
+        lv_obj_set_style_bg_color(s_slots[i].container, s_theme.card, 0);
+        lv_obj_set_style_border_color(s_slots[i].container, s_theme.border, 0);
+        if (s_slots[i].label) lv_obj_set_style_text_color(s_slots[i].label, s_theme.sec, 0);
     }
 }

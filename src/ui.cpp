@@ -339,10 +339,11 @@ void ui_set_flight(const FlightData &f, int screen_bearing_deg) {
     }
 
     // Direction arrow (page 1)
-    // Nose points RIGHT, so subtract 90° so that bearing=0 (north) → nose points up
+    // Plane image nose points UP (north). bearing=0 → no rotation; rotate
+    // clockwise by the bearing (minus the screen's facing direction).
     if (img_direction_arrow) {
         float b = f.bearing_deg;
-        int   angle_dd = (int)(fmodf(b - screen_bearing_deg - 90.0f + 720.0f, 360.0f) * 10.0f);
+        int   angle_dd = (int)(fmodf(b - screen_bearing_deg + 720.0f, 360.0f) * 10.0f);
         lv_img_set_pivot(img_direction_arrow, 40, 40);
         lv_img_set_angle(img_direction_arrow, angle_dd);
     }
@@ -361,8 +362,9 @@ void ui_set_flight(const FlightData &f, int screen_bearing_deg) {
         int py = (int)(310.0f - r * cosf(angle_rad)) - 14;
         lv_obj_set_pos(p2_img_plane, px, py);
 
-        // Track heading: subtract 90° because nose points right not up
-        int track_dd = (int)(fmodf(f.track_deg - 90.0f + 360.0f, 360.0f) * 10.0f);
+        // Track heading: nose points UP, so rotate clockwise by the track
+        // angle, adjusted for the screen's facing direction.
+        int track_dd = (int)(fmodf(f.track_deg - screen_bearing_deg + 360.0f, 360.0f) * 10.0f);
         lv_img_set_pivot(p2_img_plane, 14, 14);
         lv_img_set_angle(p2_img_plane, track_dd);
     }

@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
+#include <ArduinoOTA.h>
 #include <LittleFS.h>
 #include <time.h>
 
@@ -17,27 +19,10 @@
 
 static AppConfig cfg;
 
-// ── WiFi ──────────────────────────────────────────────────────────────────
-
-static bool wifi_connect() {
-    Serial.printf("[wifi] Connecting to %s\n", cfg.wifi_ssid);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(cfg.wifi_ssid, cfg.wifi_password);
-    for (int i = 0; i < 40; i++) {
-        if (WiFi.status() == WL_CONNECTED) {
-            Serial.printf("[wifi] Connected: %s\n", WiFi.localIP().toString().c_str());
-            return true;
-        }
-        delay(500);
-    }
-    Serial.println("[wifi] Timed out");
-    return false;
-}
-
 // ── NTP ───────────────────────────────────────────────────────────────────
 
 static void ntp_init() {
-    configTime(0, 0, "pool.ntp.org", "time.google.com");
+    configTzTime(cfg.timezone, "pool.ntp.org", "time.google.com");
     struct tm t;
     for (int i = 0; i < 20; i++) {
         if (getLocalTime(&t)) return;
@@ -61,8 +46,21 @@ static char            s_last_cs[16] = {};
 
 static void poll_flight() {
     NearestAircraft ac;
-    if (!flight_poll(ac)) {
-        FlightData fd = {"NO FLIGHT", "", "---", "---", 0, 0, 0};
+    FlightResult result = flight_poll(ac);
+    if (result != FLIGHT_OK) {
+        const char *label;
+        static char sub[16];
+        sub[0] = '\0';
+        switch (result) {
+            case FLIGHT_NO_COORDS:  label = "NO COORDS"; break;
+            case FLIGHT_NET_ERROR:
+                label = "NET ERROR";
+                snprintf(sub, sizeof(sub), "code %d", flight_last_http_code());
+                break;
+            case FLIGHT_JSON_ERROR: label = "API ERROR"; break;
+            default:                label = "NO FLIGHT"; break;
+        }
+        FlightData fd = {label, sub, "---", "---", 0, 0, 0};
         ui_set_flight(fd, cfg.screen_bearing);
         memset(&s_aircraft, 0, sizeof(s_aircraft));
         s_last_cs[0] = '\0';
@@ -93,8 +91,9 @@ static void poll_flight() {
 static void on_slot_state(int i, const char *state, float value, bool has_value) {
     ui_set_slot_state(i, state, value, has_value);
 }
-static void on_temp(float c)                  { ui_set_temp(c); }
-static void on_humidity(float p)              { ui_set_humidity(p); }
+static void on_temp(float c)     { ui_set_temp(c); }
+static void on_humidity(float p) { ui_set_humidity(p); }
+static void on_display(int pct)  { display_set_brightness(pct); }
 
 // ── Screen helpers ────────────────────────────────────────────────────────
 
@@ -103,6 +102,107 @@ static void lvgl_tick_fn(uint32_t &last) {
     lv_tick_inc(now - last);
     last = now;
     lv_timer_handler();
+}
+
+// ── WiFi ──────────────────────────────────────────────────────────────────
+
+static volatile bool s_wifi_reset_requested = false;
+
+static void on_wifi_reset_btn(lv_event_t *e) {
+    s_wifi_reset_requested = true;
+}
+
+// Shown only after a prolonged connect failure — keeps retrying in the
+// background so a temporary outage never wipes saved config. A manual button
+// is the only way to actually clear WiFi/HA/location settings.
+static void show_reconnect_screen(const char *ssid) {
+    lv_obj_t *scr = lv_scr_act();
+    lv_obj_clean(scr);
+    lv_obj_set_style_bg_color(scr, lv_color_hex(0x0d1117), 0);
+    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+
+    lv_obj_t *title = lv_label_create(scr);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_40, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0x58a6ff), 0);
+    lv_label_set_text(title, "JetClock");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 50);
+
+    lv_obj_t *sub = lv_label_create(scr);
+    lv_obj_set_style_text_font(sub, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(sub, lv_color_hex(0xe6edf3), 0);
+    lv_label_set_text(sub, "Reconnecting to Wi-Fi...");
+    lv_obj_align(sub, LV_ALIGN_TOP_MID, 0, 106);
+
+    lv_obj_t *body = lv_label_create(scr);
+    lv_obj_set_style_text_font(body, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(body, lv_color_hex(0x8b949e), 0);
+    lv_obj_set_style_text_align(body, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(body, 420);
+    char buf[100];
+    snprintf(buf, sizeof(buf),
+        "Looking for:\n%s\n\nAll settings are safe.\nIt will keep trying in the background.",
+        ssid);
+    lv_label_set_text(body, buf);
+    lv_obj_align(body, LV_ALIGN_CENTER, 0, -10);
+
+    lv_obj_t *btn = lv_btn_create(scr);
+    lv_obj_set_size(btn, 280, 50);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -40);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x30363d), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0xf85149), 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_add_event_cb(btn, on_wifi_reset_btn, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t *blbl = lv_label_create(btn);
+    lv_obj_set_style_text_color(blbl, lv_color_hex(0xf85149), 0);
+    lv_label_set_text(blbl, "Reset Wi-Fi Settings");
+    lv_obj_center(blbl);
+}
+
+// Blocks until connected or the user taps "Reset Wi-Fi Settings" on the
+// reconnect screen. Never gives up and wipes config on its own — a router
+// reboot or a patchy outdoor signal should not cost the user their setup.
+static bool wifi_connect() {
+    Serial.printf("[wifi] Connecting to %s\n", cfg.wifi_ssid);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(cfg.wifi_ssid, cfg.wifi_password);
+
+    s_wifi_reset_requested = false;
+    bool     screen_shown  = false;
+    uint32_t t             = millis();
+    uint32_t attempt_start = millis();
+    uint32_t last_retry    = millis();
+
+    for (;;) {
+        lvgl_tick_fn(t);
+
+        if (WiFi.status() == WL_CONNECTED) {
+            WiFi.setTxPower(WIFI_POWER_19_5dBm);
+            esp_wifi_set_ps(WIFI_PS_NONE);
+            Serial.printf("[wifi] Connected: %s RSSI=%d dBm\n",
+                          WiFi.localIP().toString().c_str(), WiFi.RSSI());
+            return true;
+        }
+
+        // Only show the reconnect screen (with reset option) after a real
+        // outage — avoids flashing it on every normal fast connect.
+        if (!screen_shown && millis() - attempt_start > 8000) {
+            show_reconnect_screen(cfg.wifi_ssid);
+            screen_shown = true;
+        }
+
+        if (s_wifi_reset_requested) {
+            Serial.println("[wifi] User requested Wi-Fi reset");
+            return false;
+        }
+
+        if (millis() - last_retry > 15000) {
+            WiFi.disconnect();
+            WiFi.begin(cfg.wifi_ssid, cfg.wifi_password);
+            last_retry = millis();
+        }
+
+        delay(20);
+    }
 }
 
 // Draw the WiFi-only captive portal screen.
@@ -195,20 +295,23 @@ void setup() {
         return; // unreachable — portal reboots
     }
 
-    // Connect to WiFi
+    // Connect to WiFi — blocks until connected, or the user explicitly taps
+    // "Reset Wi-Fi Settings" on the reconnect screen. A patchy/absent network
+    // never wipes config on its own.
     if (!wifi_connect()) {
-        Serial.println("[boot] WiFi failed — back to portal");
-        show_portal_screen();
-        config_reset(cfg); // clear bad credentials
+        Serial.println("[boot] User reset Wi-Fi — clearing credentials");
+        config_reset(cfg);
         config_save(cfg);
-        uint32_t t = millis();
-        setup_portal_run(cfg, [&]() { lvgl_tick_fn(t); });
+        ESP.restart();
         return; // unreachable
     }
 
     // Start mDNS + persistent config web server (always, on home WiFi)
     web_server_init(cfg);
     ntp_init();
+
+    ArduinoOTA.setHostname("jetclock");
+    ArduinoOTA.begin();
 
     // Phase 2: WiFi connected but location not set → prompt to visit jetclock.local
     bool location_set = (cfg.home_lat != 0.0f || cfg.home_lon != 0.0f);
@@ -230,6 +333,7 @@ void setup() {
     flight_set_home(cfg.home_lat, cfg.home_lon, cfg.radius_nm);
     ui_set_slot_callbacks([](int idx) { ha_client_activate(idx); },
                           [](int idx, int v) { ha_client_set_value(idx, v); });
+    ui_apply_theme(cfg.theme);
     ui_init(cfg);
 
     // Flush the freshly-built UI to the panel BEFORE any blocking network
@@ -241,7 +345,7 @@ void setup() {
     }
     Serial.println("[boot] UI rendered");
 
-    ha_client_init(cfg, on_slot_state, on_temp, on_humidity);
+    ha_client_init(cfg, on_slot_state, on_temp, on_humidity, on_display);
     Serial.println("[boot] HA client started");
     poll_flight();
     Serial.println("[boot] Ready");
@@ -260,9 +364,11 @@ void loop() {
     }
     display_tick();
     ha_client_tick();
+    ArduinoOTA.handle();
 
     if (now - last_time >= 60000 || last_time == 0) {
         update_time_labels();
+        ui_set_wifi(WiFi.RSSI());
         last_time = now;
     }
     if (now - last_flight >= FLIGHT_POLL_MS || last_flight == 0) {

@@ -17,10 +17,22 @@ struct NearestAircraft {
 // Configure the home location and search radius before polling.
 void flight_set_home(float lat, float lon, int radius_nm);
 
-// Poll adsb.lol for the nearest aircraft.
-// Returns true and populates `out` if a result was found.
-// Returns false on network error or no aircraft in range.
-bool flight_poll(NearestAircraft &out);
+enum FlightResult : uint8_t {
+    FLIGHT_OK,
+    FLIGHT_NO_COORDS,   // lat/lon both zero — not configured
+    FLIGHT_NET_ERROR,   // HTTP != 200 or connection failed
+    FLIGHT_JSON_ERROR,  // JSON parse error
+    FLIGHT_NO_AC,       // API returned empty aircraft array
+    FLIGHT_NO_MATCH,    // No commercial flights passed filter
+};
+
+// Poll airplanes.live for the nearest aircraft.
+// Returns FLIGHT_OK and populates `out` on success, otherwise an error code.
+FlightResult flight_poll(NearestAircraft &out);
+
+// HTTP status code (or negative HTTPClient error) from the most recent poll.
+// Only meaningful after a FLIGHT_NET_ERROR result.
+int flight_last_http_code();
 
 // Haversine distance in km between two lat/lon points.
 float haversine_km(float lat1, float lon1, float lat2, float lon2);

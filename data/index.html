@@ -1,519 +1,320 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JetClock — Configure</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JetClock</title>
 <style>
-  :root {
-    --bg:     #0d1117;
-    --surface:#161b22;
-    --card:   #21262d;
-    --border: #30363d;
-    --text:   #e6edf3;
-    --muted:  #8b949e;
-    --accent: #58a6ff;
-    --green:  #3fb950;
-    --warn:   #d29922;
-    --red:    #f85149;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 15px;
-    padding-bottom: 80px;
-  }
+:root{
+  --bg:#0d1117;--surface:#161b22;--border:#21262d;--border2:#30363d;
+  --txt:#e6edf3;--muted:#8b949e;--blue:#58a6ff;--blue-dim:#1f3a5f;
+  --green:#3fb950;--accent:#79c0ff;--yellow:#e3b341;--red:#f85149;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh;font-size:14px}
 
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-  header .icon { font-size: 24px; }
-  header h1 { font-size: 18px; font-weight: 700; flex: 1; }
-  header .ip { font-size: 12px; color: var(--muted); }
+header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+header h1{font-size:18px;font-weight:600;color:var(--blue)}
+#dot{width:8px;height:8px;border-radius:50%;background:var(--border2)}
+#dot.ok{background:var(--green)}
+#statusLbl{margin-left:auto;font-size:12px;color:var(--muted)}
+#statusLbl.ok{color:var(--green)}
 
-  main { max-width: 640px; margin: 0 auto; padding: 28px 16px; display: flex; flex-direction: column; gap: 20px; }
+.layout{display:flex;gap:20px;padding:20px;align-items:flex-start;max-width:1000px;margin:0 auto}
+@media(max-width:700px){.layout{flex-direction:column}}
 
-  section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    overflow: hidden;
-  }
-  .section-title {
-    padding: 12px 18px;
-    background: var(--card);
-    border-bottom: 1px solid var(--border);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .section-title .saved-badge {
-    background: rgba(63,185,80,0.15);
-    color: var(--green);
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 11px;
-    display: none;
-  }
-  .section-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.preview-col{flex-shrink:0;width:200px}
+.preview-col h2{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px}
+.preview-device{background:#0a0e14;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.preview-slots{padding:6px;display:flex;flex-direction:column;gap:5px}
+.preview-card{
+  height:54px;border-radius:7px;border:1px solid var(--border);
+  background:#111620;cursor:pointer;padding:8px 10px;
+  transition:border-color .15s,background .15s;position:relative;overflow:hidden;
+  display:flex;flex-direction:column;justify-content:space-between;
+}
+.preview-card:hover{border-color:var(--border2);background:#161e2a}
+.preview-card.active{border-color:var(--blue)!important;background:var(--blue-dim)!important}
+.preview-card .pc-fill{position:absolute;left:0;top:0;height:100%;background:var(--accent);opacity:.18;border-radius:7px;pointer-events:none}
+.preview-card .pc-label{font-size:11px;color:var(--muted);z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preview-card .pc-value{font-size:12px;color:var(--txt);z-index:1}
+.preview-card.empty .pc-label{color:var(--border2)}
+.drop-hint{text-align:center;font-size:11px;color:var(--border2);margin-top:8px}
 
-  label { display: flex; flex-direction: column; gap: 5px; }
-  label .lbl { font-size: 12px; font-weight: 600; color: var(--muted); }
-  label small { font-size: 11px; color: var(--muted); opacity: 0.7; margin-top: 2px; }
-  input, select {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-size: 15px;
-    padding: 9px 12px;
-    width: 100%;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  input:focus, select:focus { border-color: var(--accent); }
-  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
-  select option { background: var(--bg); }
+.config-col{flex:1;min-width:0}
+.config-col h2{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px}
+.empty-state{text-align:center;padding:40px 0;color:var(--muted);font-size:13px}
 
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.type-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:18px}
+.type-btn{
+  background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  padding:10px 4px 8px;text-align:center;cursor:pointer;transition:all .15s;user-select:none;
+}
+.type-btn:hover{border-color:var(--border2);background:#131920}
+.type-btn.active{border-color:var(--blue);background:var(--blue-dim)}
+.type-btn .ti{font-size:16px;display:block;margin-bottom:3px;line-height:1}
+.type-btn .tn{font-size:10px;color:var(--muted)}
+.type-btn.active .tn{color:var(--accent)}
 
-  .callout {
-    background: rgba(88,166,255,0.08);
-    border: 1px solid rgba(88,166,255,0.25);
-    border-radius: 8px;
-    padding: 12px 14px;
-    font-size: 13px;
-    color: var(--muted);
-    line-height: 1.6;
-  }
-  .callout strong { color: var(--text); }
-  .callout ol { padding-left: 18px; margin-top: 6px; }
-  .callout ol li { margin-top: 4px; }
-  .callout a { color: var(--accent); }
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.field input,.field select{
+  width:100%;background:var(--bg);border:1px solid var(--border);
+  color:var(--txt);padding:7px 10px;border-radius:6px;font-size:13px;
+  outline:none;transition:border-color .15s;-webkit-appearance:none;
+}
+.field input:focus,.field select:focus{border-color:var(--blue)}
+.field select option{background:var(--bg)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
-  .btn {
-    background: var(--accent);
-    border: none;
-    border-radius: 7px;
-    color: #fff;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 700;
-    padding: 10px 18px;
-    transition: opacity 0.15s;
-    white-space: nowrap;
-  }
-  .btn:hover { opacity: 0.85; }
-  .btn.ghost {
-    background: var(--card);
-    color: var(--muted);
-    border: 1px solid var(--border);
-    font-weight: 500;
-  }
+.settings{max-width:1000px;margin:0 auto 20px;padding:0 20px}
+.acc{border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.acc-head{padding:13px 18px;cursor:pointer;display:flex;align-items:center;gap:8px;background:var(--surface);font-size:13px;font-weight:500;user-select:none}
+.acc-head:hover{background:#1c2128}
+.acc-chevron{margin-left:auto;color:var(--muted);font-size:11px;transition:transform .2s}
+.acc-body{padding:18px;border-top:1px solid var(--border);display:none}
+.acc.open .acc-chevron{transform:rotate(180deg)}
+.acc.open .acc-body{display:block}
 
-  .ha-row { display: flex; gap: 10px; align-items: flex-end; }
-  .ha-row label { flex: 1; }
+footer{border-top:1px solid var(--border);padding:14px 20px;display:flex;gap:10px;justify-content:flex-end;max-width:1000px;margin:0 auto}
+.btn{padding:8px 16px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn-primary{background:var(--blue);color:#000}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
 
-  .status {
-    border-radius: 7px;
-    font-size: 13px;
-    padding: 10px 14px;
-    display: none;
-  }
-  .status.ok   { background: rgba(63,185,80,0.12);  color: var(--green);  display: block; }
-  .status.err  { background: rgba(248,81,73,0.12);  color: var(--red);    display: block; }
-  .status.info { background: rgba(88,166,255,0.10); color: var(--accent); display: block; }
-
-  /* Button slots */
-  .slots { display: flex; flex-direction: column; gap: 10px; }
-  .slot {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .slot-num { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; }
-
-  /* Save bar */
-  #save-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding: 14px 20px;
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    max-width: 640px;
-    margin: 0 auto;
-  }
-  #save-bar .btn { padding: 12px 28px; font-size: 15px; }
-
-  .spinner {
-    display: inline-block;
-    width: 12px; height: 12px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    vertical-align: middle;
-    margin-right: 5px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
+#toast{position:fixed;bottom:18px;right:18px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;transform:translateY(80px);opacity:0;transition:all .25s;pointer-events:none;z-index:99}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.err{border-color:var(--red);color:var(--red)}
 </style>
 </head>
 <body>
 
 <header>
-  <span class="icon">✈</span>
+  <div id="dot"></div>
   <h1>JetClock</h1>
-  <span class="ip" id="ip-display"></span>
+  <span id="statusLbl">Loading…</span>
 </header>
 
-<main>
-
-  <!-- Location -->
-  <section id="sec-location">
-    <div class="section-title">
-      Location
-      <span class="saved-badge" id="badge-location">Saved</span>
+<div class="layout">
+  <div class="preview-col">
+    <h2>Side Panel</h2>
+    <div class="preview-device">
+      <div class="preview-slots" id="previewSlots"></div>
     </div>
-    <div class="section-body">
-      <div class="callout">
-        Open <a href="https://maps.google.com" target="_blank">Google Maps</a>,
-        right-click your home and copy the coordinates.
+    <div class="drop-hint">Click a slot to configure</div>
+  </div>
+
+  <div class="config-col">
+    <h2 id="panelTitle">Configuration</h2>
+    <div class="panel" id="panel">
+      <div class="empty-state">← Select a slot to configure it</div>
+    </div>
+  </div>
+</div>
+
+<div class="settings">
+  <div class="acc" id="acc-ha">
+    <div class="acc-head" onclick="toggleAcc('acc-ha')">
+      <span>⚡</span> Home Assistant <span class="acc-chevron">▾</span>
+    </div>
+    <div class="acc-body">
+      <div class="field"><label>HA URL</label><input id="ha_url" placeholder="http://homeassistant.local:8123"></div>
+      <div class="field"><label>Long-Lived Token</label><input id="ha_token" type="password" placeholder="eyJ…"></div>
+      <div class="row2">
+        <div class="field"><label>Temperature Entity</label><input id="temp_entity" placeholder="sensor.temperature"></div>
+        <div class="field"><label>Humidity Entity</label><input id="humidity_entity" placeholder="sensor.humidity"></div>
+      </div>
+    </div>
+  </div>
+  <div class="acc" id="acc-loc">
+    <div class="acc-head" onclick="toggleAcc('acc-loc')">
+      <span>📍</span> Location &amp; Display <span class="acc-chevron">▾</span>
+    </div>
+    <div class="acc-body">
+      <div class="row2">
+        <div class="field"><label>Latitude</label><input id="home_lat" type="number" step="0.0001"></div>
+        <div class="field"><label>Longitude</label><input id="home_lon" type="number" step="0.0001"></div>
       </div>
       <div class="row2">
-        <label>
-          <span class="lbl">Latitude</span>
-          <input id="home_lat" type="number" step="0.0001" placeholder="53.6143">
-        </label>
-        <label>
-          <span class="lbl">Longitude</span>
-          <input id="home_lon" type="number" step="0.0001" placeholder="-1.6485">
-        </label>
+        <div class="field"><label>Radius (nm)</label><input id="radius_nm" type="number" min="5" max="200"></div>
+        <div class="field"><label>Screen Bearing (°)</label><input id="screen_bearing" type="number" min="0" max="359"></div>
       </div>
+      <div class="field"><label>Timezone (POSIX)</label><input id="timezone" placeholder="GMT0BST,M3.5.0/1,M10.5.0"></div>
+      <div class="field"><label>Theme</label>
+        <select id="theme">
+          <option>Midnight</option><option>Warm Brown</option>
+          <option>Forest</option><option>iOS</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="acc" id="acc-disp">
+    <div class="acc-head" onclick="toggleAcc('acc-disp')">
+      <span>☀</span> Display Brightness (HA) <span class="acc-chevron">▾</span>
+    </div>
+    <div class="acc-body">
       <div class="row2">
-        <label>
-          <span class="lbl">Search radius (nautical miles)</span>
-          <input id="radius_nm" type="number" min="5" max="100" value="30">
-          <small>30 nm ≈ 55 km</small>
-        </label>
-        <label>
-          <span class="lbl">Screen facing direction (°)</span>
-          <input id="screen_bearing" type="number" min="0" max="359" value="0">
-          <small>Compass bearing the display faces</small>
-        </label>
+        <div class="field"><label>Brightness Entity</label><input id="display_brightness_entity" placeholder="input_number.jetclock_brightness"></div>
+        <div class="field"><label>Power Entity</label><input id="display_power_entity" placeholder="input_boolean.jetclock_power"></div>
       </div>
-      <button class="btn" onclick="saveSection('location')">Save location</button>
-      <div id="status-location" class="status"></div>
     </div>
-  </section>
-
-  <!-- Home Assistant -->
-  <section id="sec-ha">
-    <div class="section-title">
-      Home Assistant
-      <span class="saved-badge" id="badge-ha">Saved</span>
+  </div>
+  <div class="acc" id="acc-wifi">
+    <div class="acc-head" onclick="toggleAcc('acc-wifi')">
+      <span>📶</span> Wi-Fi <span class="acc-chevron">▾</span>
     </div>
-    <div class="section-body">
-
-      <label>
-        <span class="lbl">Home Assistant URL</span>
-        <input id="ha_url" type="url" placeholder="http://homeassistant.local:8123" autocomplete="off">
-        <small>Your local HA address — not app.nabu.casa</small>
-      </label>
-
-      <label>
-        <span class="lbl">Long-lived access token</span>
-        <input id="ha_token" type="password" autocomplete="new-password" placeholder="eyJ…">
-      </label>
-
-      <div class="callout">
-        <strong>How to create a token:</strong>
-        <ol>
-          <li>Open Home Assistant in your browser</li>
-          <li>Click your username (bottom-left)</li>
-          <li>Scroll to <strong>Long-lived access tokens</strong></li>
-          <li>Click <strong>Create token</strong>, give it a name (e.g. "JetClock"), copy it</li>
-        </ol>
+    <div class="acc-body">
+      <div class="row2">
+        <div class="field"><label>Network</label><input id="wifi_ssid"></div>
+        <div class="field"><label>Password</label><input id="wifi_password" type="password"></div>
       </div>
-
-      <div class="ha-row">
-        <label>
-          <span class="lbl">Temperature sensor <em style="font-weight:400;opacity:0.6">(optional)</em></span>
-          <input id="temp_entity" type="text" placeholder="sensor.outdoor_temperature" spellcheck="false">
-        </label>
-      </div>
-      <label>
-        <span class="lbl">Humidity sensor <em style="font-weight:400;opacity:0.6">(optional)</em></span>
-        <input id="humidity_entity" type="text" placeholder="sensor.outdoor_humidity" spellcheck="false">
-      </label>
-
-      <button class="btn" onclick="saveSection('ha')">Save HA settings</button>
-      <div id="status-ha" class="status"></div>
-
     </div>
-  </section>
+  </div>
+</div>
 
-  <!-- Smart home buttons -->
-  <section id="sec-slots">
-    <div class="section-title">
-      Side-panel cards (5 slots)
-      <span class="saved-badge" id="badge-slots">Saved</span>
-    </div>
-    <div class="section-body">
-      <div class="slots" id="slots"></div>
-      <button class="btn" onclick="saveSection('slots')">Save cards</button>
-      <div id="status-slots" class="status"></div>
-    </div>
-  </section>
-
-  <!-- WiFi (change network) -->
-  <section>
-    <div class="section-title">Wi-Fi</div>
-    <div class="section-body">
-      <label>
-        <span class="lbl">Network (SSID)</span>
-        <input id="wifi_ssid" type="text" autocomplete="off" spellcheck="false">
-      </label>
-      <label>
-        <span class="lbl">Password</span>
-        <input id="wifi_password" type="password" autocomplete="new-password" placeholder="Leave blank to keep current">
-      </label>
-      <button class="btn ghost" onclick="saveWifi()">Change network &amp; reboot</button>
-      <div id="status-wifi" class="status"></div>
-    </div>
-  </section>
-
-</main>
+<footer>
+  <button class="btn btn-ghost" onclick="loadConfig()">Reload</button>
+  <button class="btn btn-primary" onclick="saveConfig()">Save &amp; Reboot</button>
+</footer>
+<div id="toast"></div>
 
 <script>
-const NUM_SLOTS = 5;
-
-// ── Init ───────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  buildSlots();
-  await loadStatus();
-  await loadConfig();
-});
-
-async function loadStatus() {
-  try {
-    const r = await fetch('/status');
-    const d = await r.json();
-    document.getElementById('ip-display').textContent = d.ip;
-  } catch(_) {}
-}
-
-async function loadConfig() {
-  try {
-    const r = await fetch('/config');
-    if (!r.ok) return;
-    applyConfig(await r.json());
-  } catch(_) {}
-}
-
-function applyConfig(c) {
-  setVal('home_lat',       c.home_lat       || '');
-  setVal('home_lon',       c.home_lon       || '');
-  setVal('radius_nm',      c.radius_nm      || 30);
-  setVal('screen_bearing', c.screen_bearing || 0);
-  setVal('ha_url',         c.ha_url         || 'http://homeassistant.local:8123');
-  setVal('ha_token',       c.ha_token       || '');
-  setVal('temp_entity',    c.temp_entity    || '');
-  setVal('humidity_entity',c.humidity_entity|| '');
-  setVal('wifi_ssid',      c.wifi_ssid      || '');
-
-  const slots = c.slots || [];
-  for (let i = 0; i < NUM_SLOTS; i++) {
-    const s = slots[i] || {};
-    setVal(`slot-${i}-type`,    s.type ?? 0);
-    setVal(`slot-${i}-entity`,  s.entity_id || '');
-    setVal(`slot-${i}-label`,   s.label     || '');
-    setVal(`slot-${i}-service`, s.service   || '');
-    setVal(`slot-${i}-attr`,    s.attribute || '');
-    setVal(`slot-${i}-unit`,    s.unit      || '');
-    setVal(`slot-${i}-min`,     s.min ?? 0);
-    setVal(`slot-${i}-max`,     s.max ?? 100);
-    onSlotType(i);
-  }
-}
-
-// ── Slots ─────────────────────────────────────────────────────────────────
-// Card type values must match the CardType enum in config.h.
-const CARD_TYPES = [
-  [0, '— Empty —'],
-  [1, 'Toggle (switch / plug / light)'],
-  [2, 'Slider (brightness / position)'],
-  [3, 'Sensor (read-only value)'],
-  [4, 'Action (scene / script / button)'],
-  [5, 'Cover (blind / garage)'],
-  [6, 'Light (on/off + brightness)'],
-  [7, 'Climate (thermostat)'],
-  [8, 'Lock'],
-  [9, 'Option select'],
+const TYPES=[
+  {id:0,name:'Empty',  icon:'—',  color:'#30363d'},
+  {id:1,name:'Toggle', icon:'⏻', color:'#58a6ff'},
+  {id:2,name:'Slider', icon:'◐', color:'#7c3aed'},
+  {id:3,name:'Sensor', icon:'⊙', color:'#3fb950'},
+  {id:4,name:'Action', icon:'▶', color:'#e3b341'},
+  {id:5,name:'Cover',  icon:'▤', color:'#58a6ff'},
+  {id:6,name:'Light',  icon:'◑', color:'#f0c060'},
+  {id:7,name:'Climate',icon:'◉', color:'#f85149'},
+  {id:8,name:'Lock',   icon:'⊠', color:'#da3633'},
+  {id:9,name:'Select', icon:'≡', color:'#8b949e'},
 ];
+const EXTRA={2:['min_max'],3:['attribute','unit'],4:['service'],6:['attribute'],7:['min_max','unit'],9:['service']};
 
-function buildSlots() {
-  const c = document.getElementById('slots');
-  for (let i = 0; i < NUM_SLOTS; i++) {
-    const opts = CARD_TYPES.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
-    c.insertAdjacentHTML('beforeend', `
-      <div class="slot">
-        <div class="slot-num">SLOT ${i+1}</div>
-        <label>
-          <span class="lbl">Card type</span>
-          <select id="slot-${i}-type" onchange="onSlotType(${i})">${opts}</select>
-        </label>
-        <div id="slot-${i}-body">
-          <label>
-            <span class="lbl">Entity ID</span>
-            <input id="slot-${i}-entity" type="text" placeholder="light.living_room" spellcheck="false" autocomplete="off">
-            <small>Find in HA → Developer Tools → States</small>
-          </label>
-          <label>
-            <span class="lbl">Label on display</span>
-            <input id="slot-${i}-label" type="text" placeholder="Living Room">
-          </label>
-          <div class="row2 slot-x-slider" id="slot-${i}-x-slider" style="display:none">
-            <label><span class="lbl">Min</span><input id="slot-${i}-min" type="number" value="0"></label>
-            <label><span class="lbl">Max</span><input id="slot-${i}-max" type="number" value="100"></label>
-          </div>
-          <div class="slot-x-sensor" id="slot-${i}-x-sensor" style="display:none">
-            <div class="row2">
-              <label><span class="lbl">Unit</span><input id="slot-${i}-unit" type="text" placeholder="°C  %  min"></label>
-              <label><span class="lbl">Attribute <em style="font-weight:400;opacity:.6">(optional)</em></span><input id="slot-${i}-attr" type="text" placeholder="leave blank for state"></label>
-            </div>
-          </div>
-          <label class="slot-x-action" id="slot-${i}-x-action" style="display:none">
-            <span class="lbl">Service override <em style="font-weight:400;opacity:.6">(optional)</em></span>
-            <input id="slot-${i}-service" type="text" placeholder="script.turn_on">
-            <small>Defaults are inferred from the entity domain.</small>
-          </label>
-        </div>
-      </div>`);
+let cfg={slots:[]}, sel=-1;
+
+function initSlots(){
+  for(let i=0;i<5;i++)
+    cfg.slots[i]=cfg.slots[i]||{type:0,entity_id:'',label:'',domain:'',service:'',attribute:'',unit:'',min:0,max:100};
+}
+
+function buildPreview(){
+  const el=document.getElementById('previewSlots');
+  el.innerHTML='';
+  for(let i=0;i<5;i++){
+    const s=cfg.slots[i]||{};
+    const t=TYPES[s.type||0];
+    const empty=!s.entity_id||s.type===0;
+    const hasFill=s.type===2||s.type===6;
+    const d=document.createElement('div');
+    d.className='preview-card'+(empty?' empty':'')+(i===sel?' active':'');
+    d.innerHTML=
+      (hasFill?'<div class="pc-fill" style="width:60%"></div>':'')+
+      '<div class="pc-label">'+(s.label||(empty?'Empty slot':''))+'</div>'+
+      (empty?'':'<div class="pc-value" style="color:'+t.color+'">'+t.icon+' '+t.name+'</div>');
+    d.onclick=()=>selectSlot(i);
+    el.appendChild(d);
   }
 }
 
-// Show only the extra fields relevant to the chosen card type, and hide the
-// entity/label rows entirely for Empty slots.
-function onSlotType(i) {
-  const t = parseInt(getVal(`slot-${i}-type`)) || 0;
-  document.getElementById(`slot-${i}-body`).style.display = (t === 0) ? 'none' : '';
-  const show = (sel, on) => document.getElementById(`slot-${i}-x-${sel}`).style.display = on ? '' : 'none';
-  show('slider', t === 2);
-  show('sensor', t === 3);
-  show('action', t === 4);
+function selectSlot(i){
+  sel=i; buildPreview();
+  document.getElementById('panelTitle').textContent='Slot '+(i+1);
+  const s=cfg.slots[i];
+  document.getElementById('panel').innerHTML=
+    '<div class="type-grid">'+TYPES.map(t=>
+      '<div class="type-btn'+(s.type===t.id?' active':'')+'" onclick="setType('+i+','+t.id+')">'+
+      '<span class="ti">'+t.icon+'</span><div class="tn">'+t.name+'</div></div>'
+    ).join('')+'</div>'+
+    '<div class="field"><label>Entity ID</label>'+
+    '<input value="'+esc(s.entity_id)+'" placeholder="domain.entity_name" oninput="setF('+i+',\'entity_id\',this.value)"></div>'+
+    '<div class="field"><label>Display Label</label>'+
+    '<input value="'+esc(s.label)+'" placeholder="My Light" oninput="setF('+i+',\'label\',this.value)"></div>'+
+    '<div id="xf">'+extraHTML(i)+'</div>';
 }
 
-// ── Save sections ──────────────────────────────────────────────────────────
-async function saveSection(section) {
-  const s = document.getElementById(`status-${section}`);
-  const badge = document.getElementById(`badge-${section}`);
-  show(s, 'info', '<span class="spinner"></span> Saving…');
-
-  let payload = {};
-  if (section === 'location') {
-    payload = {
-      home_lat:       parseFloat(getVal('home_lat'))       || 0,
-      home_lon:       parseFloat(getVal('home_lon'))       || 0,
-      radius_nm:      parseInt(getVal('radius_nm'))        || 30,
-      screen_bearing: parseInt(getVal('screen_bearing'))   || 0,
-    };
-  } else if (section === 'ha') {
-    payload = {
-      ha_url:          getVal('ha_url').replace(/\/$/, ''),
-      ha_token:        getVal('ha_token'),
-      temp_entity:     getVal('temp_entity'),
-      humidity_entity: getVal('humidity_entity'),
-    };
-  } else if (section === 'slots') {
-    const slots = [];
-    for (let i = 0; i < NUM_SLOTS; i++) {
-      const type = parseInt(getVal(`slot-${i}-type`)) || 0;
-      const eid  = getVal(`slot-${i}-entity`);
-      if (type === 0 || !eid) { slots.push({ type: 0 }); continue; }
-      slots.push({
-        type,
-        entity_id: eid,
-        label:     getVal(`slot-${i}-label`) || eid.split('.')[1] || eid,
-        domain:    eid.split('.')[0],
-        service:   getVal(`slot-${i}-service`),
-        attribute: getVal(`slot-${i}-attr`),
-        unit:      getVal(`slot-${i}-unit`),
-        min:       parseInt(getVal(`slot-${i}-min`)) || 0,
-        max:       parseInt(getVal(`slot-${i}-max`)) || 100,
-      });
-    }
-    payload = { slots };
-  }
-
-  try {
-    // Merge with existing config to avoid clearing other fields
-    const existing = await (await fetch('/config')).json();
-    const merged = { ...existing, ...payload };
-    const r = await fetch('/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(merged),
-    });
-    const d = await r.json();
-    if (d.ok) {
-      show(s, 'ok', '✓ Saved');
-      if (badge) { badge.style.display = 'block'; setTimeout(() => badge.style.display = 'none', 3000); }
-    } else {
-      show(s, 'err', 'Save failed');
-    }
-  } catch(e) { show(s, 'err', e.message); }
+function extraHTML(i){
+  const s=cfg.slots[i], ex=EXTRA[s.type]||[];
+  let h='';
+  if(ex.includes('min_max'))
+    h+='<div class="row2"><div class="field"><label>Min</label><input type="number" value="'+(s.min??0)+'" oninput="setF('+i+',\'min\',+this.value)"></div>'+
+       '<div class="field"><label>Max</label><input type="number" value="'+(s.max??100)+'" oninput="setF('+i+',\'max\',+this.value)"></div></div>';
+  if(ex.includes('attribute'))
+    h+='<div class="field"><label>Attribute (optional)</label><input value="'+esc(s.attribute)+'" placeholder="brightness" oninput="setF('+i+',\'attribute\',this.value)"></div>';
+  if(ex.includes('unit'))
+    h+='<div class="field"><label>Unit</label><input value="'+esc(s.unit)+'" placeholder="°C" oninput="setF('+i+',\'unit\',this.value)"></div>';
+  if(ex.includes('service'))
+    h+='<div class="field"><label>Service Override</label><input value="'+esc(s.service)+'" placeholder="scene.turn_on" oninput="setF('+i+',\'service\',this.value)"></div>';
+  return h;
 }
 
-async function saveWifi() {
-  const s = document.getElementById('status-wifi');
-  const ssid = getVal('wifi_ssid');
-  const pass = getVal('wifi_password');
-  if (!ssid) { show(s, 'err', 'SSID required.'); return; }
-  show(s, 'info', '<span class="spinner"></span> Saving and rebooting…');
-  try {
-    const existing = await (await fetch('/config')).json();
-    const payload = { ...existing, wifi_ssid: ssid, reboot: true };
-    if (pass && pass !== '********') payload.wifi_password = pass;
-    await fetch('/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    show(s, 'ok', 'Rebooting — reconnect to your new network and visit jetclock.local');
-  } catch(_) {
-    show(s, 'ok', 'Rebooting…');
-  }
+function setType(i,type){cfg.slots[i].type=type;deriveD(i);selectSlot(i);buildPreview()}
+function setF(i,k,v){cfg.slots[i][k]=v;if(k==='entity_id')deriveD(i);if(k==='label')buildPreview()}
+function deriveD(i){const e=cfg.slots[i].entity_id;if(e&&e.includes('.'))cfg.slots[i].domain=e.split('.')[0]}
+
+function applyConfig(c){
+  cfg=c; initSlots();
+  const g=(id,v)=>document.getElementById(id).value=v||'';
+  g('ha_url',c.ha_url||'http://homeassistant.local:8123');
+  g('ha_token',c.ha_token);g('temp_entity',c.temp_entity);
+  g('humidity_entity',c.humidity_entity);g('home_lat',c.home_lat);
+  g('home_lon',c.home_lon);
+  document.getElementById('radius_nm').value=c.radius_nm||25;
+  document.getElementById('screen_bearing').value=c.screen_bearing||0;
+  document.getElementById('theme').value=c.theme||'Midnight';
+  g('timezone',c.timezone||'GMT0BST,M3.5.0/1,M10.5.0');
+  g('display_brightness_entity',c.display_brightness_entity);
+  g('display_power_entity',c.display_power_entity);
+  g('wifi_ssid',c.wifi_ssid);g('wifi_password',c.wifi_password);
+  buildPreview();
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function getVal(id) { const e = document.getElementById(id); return e ? e.value.trim() : ''; }
-function setVal(id, v) { const e = document.getElementById(id); if (e) e.value = v; }
-function show(el, type, html) {
-  el.className = 'status ' + type;
-  el.innerHTML = html;
+function collect(){
+  const v=id=>document.getElementById(id).value;
+  return{wifi_ssid:v('wifi_ssid'),wifi_password:v('wifi_password'),
+    home_lat:+v('home_lat'),home_lon:+v('home_lon'),
+    radius_nm:+v('radius_nm'),screen_bearing:+v('screen_bearing'),
+    ha_url:v('ha_url'),ha_token:v('ha_token'),
+    temp_entity:v('temp_entity'),humidity_entity:v('humidity_entity'),
+    theme:v('theme'),
+    timezone:v('timezone'),
+    display_brightness_entity:v('display_brightness_entity'),
+    display_power_entity:v('display_power_entity'),
+    slots:cfg.slots};
 }
+
+async function loadConfig(){
+  try{const r=await fetch('/config');if(!r.ok)throw new Error('HTTP '+r.status);
+    applyConfig(await r.json());setStatus(true,'Connected');}
+  catch(e){setStatus(false,e.message);}
+}
+
+async function saveConfig(){
+  const cfg=collect();
+  if(cfg.home_lat!==0&&(cfg.home_lat<-90||cfg.home_lat>90))
+    return toast('Latitude must be between -90 and 90 (decimal degrees, e.g. 53.3652)',true);
+  if(cfg.home_lon!==0&&(cfg.home_lon<-180||cfg.home_lon>180))
+    return toast('Longitude must be between -180 and 180 (decimal degrees, e.g. -1.3854)',true);
+  try{const r=await fetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+    if(!r.ok)throw new Error('HTTP '+r.status);toast('Saved — rebooting…');}
+  catch(e){toast(e.message,true);}
+}
+
+function setStatus(ok,msg){
+  document.getElementById('dot').className=ok?'ok':'';
+  const el=document.getElementById('statusLbl');el.textContent=msg;el.className=ok?'ok':'';
+}
+let tt;
+function toast(msg,err){const el=document.getElementById('toast');el.textContent=msg;el.className='show'+(err?' err':'');clearTimeout(tt);tt=setTimeout(()=>el.className='',3000)}
+function toggleAcc(id){document.getElementById(id).classList.toggle('open')}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}
+
+initSlots();
+buildPreview();
+loadConfig();
 </script>
 </body>
 </html>

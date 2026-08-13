@@ -11,6 +11,7 @@ void ui_init(const AppConfig &cfg);
 void ui_set_time(const char *hhmm, const char *date);
 void ui_set_temp(float celsius);
 void ui_set_humidity(float pct);
+void ui_set_wifi(int rssi_dbm);  // -30 (great) … -90 (terrible); 0 = unknown
 
 // Flight data — all in one call to avoid partial updates
 struct FlightData {

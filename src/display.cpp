@@ -191,14 +191,56 @@ static void panel_init() {
 
 // ── LVGL callbacks ────────────────────────────────────────────────────────
 
+// Device is mounted upside down (fixed by antenna/WiFi placement), so the
+// panel image needs a 180° flip. Reversing a rectangular chunk end-to-end
+// (swap px_map[i] with px_map[count-1-i]) is exactly equivalent to mirroring
+// both axes of that chunk — for row-major data, index i = row*w+col maps to
+// count-1-i = (h-1-row)*w + (w-1-col) — so no extra scratch buffer is needed.
+// The chunk is then written to the mirrored destination rectangle.
 static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *px_map) {
     int x1 = area->x1, y1 = area->y1;
     int x2 = area->x2, y2 = area->y2;
-    esp_lcd_panel_draw_bitmap(panel, x1, y1, x2 + 1, y2 + 1, px_map);
+
+    int count = (x2 - x1 + 1) * (y2 - y1 + 1);
+    for (int i = 0, j = count - 1; i < j; i++, j--) {
+        lv_color_t tmp = px_map[i];
+        px_map[i] = px_map[j];
+        px_map[j] = tmp;
+    }
+
+    int rx1 = LCD_W - 1 - x2;
+    int rx2 = LCD_W - 1 - x1;
+    int ry1 = LCD_H - 1 - y2;
+    int ry2 = LCD_H - 1 - y1;
+
+    esp_lcd_panel_draw_bitmap(panel, rx1, ry1, rx2 + 1, ry2 + 1, px_map);
     lv_disp_flush_ready(drv);
 }
 
 // ── GT911 touch ───────────────────────────────────────────────────────────
+
+// GT911 native panel resolution — read from config registers at init.
+// Used to scale raw coords to screen coords regardless of chip config.
+static int16_t s_gt911_x_max = LCD_W - 1;
+static int16_t s_gt911_y_max = LCD_H - 1;
+
+static void gt911_read_config() {
+    // Config registers 0x8047-0x804B
+    Wire.beginTransmission(GT911_ADDR);
+    Wire.write(0x80); Wire.write(0x47);
+    Wire.endTransmission();
+    Wire.requestFrom((int)GT911_ADDR, 5);
+    if (Wire.available() >= 5) {
+        Wire.read();  // config version, skip
+        uint8_t xl = Wire.read(), xh = Wire.read();
+        uint8_t yl = Wire.read(), yh = Wire.read();
+        int16_t xm = (int16_t)((xh << 8) | xl);
+        int16_t ym = (int16_t)((yh << 8) | yl);
+        if (xm > 0) s_gt911_x_max = xm;
+        if (ym > 0) s_gt911_y_max = ym;
+    }
+    Serial.printf("[gt911] configured X_max=%d Y_max=%d\n", s_gt911_x_max, s_gt911_y_max);
+}
 
 static void gt911_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     static int16_t last_x = 0, last_y = 0;
@@ -218,6 +260,16 @@ static void gt911_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 
     uint8_t status      = Wire.read();
     uint8_t touch_count = status & 0x0F;
+
+#ifdef JETCLOCK_TOUCH_DEBUG
+    {
+        static uint32_t last = 0;
+        if (status != 0 || millis() - last > 1000) {
+            last = millis();
+            Serial.printf("[gt911] status=0x%02X count=%d\n", status, touch_count);
+        }
+    }
+#endif
 
     if (!(status & 0x80) || touch_count == 0) {
         Wire.beginTransmission(GT911_ADDR);
@@ -242,8 +294,19 @@ static void gt911_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     Wire.write(0x81); Wire.write(0x4E); Wire.write(0x00);
     Wire.endTransmission();
 
-    last_x        = (int16_t)((buf[2] << 8) | buf[1]);
-    last_y        = (int16_t)((buf[4] << 8) | buf[3]);
+    int16_t raw_x = (int16_t)((buf[1] << 8) | buf[2]);
+    int16_t raw_y = (int16_t)((buf[3] << 8) | buf[4]);
+    // Scale from GT911 native resolution to screen resolution, then swap axes.
+    // Flip both to match the 180°-rotated panel image (device is mounted
+    // upside down) so taps land on the visually rotated UI elements.
+    last_x = (LCD_W - 1) - (int16_t)((int32_t)raw_y * (LCD_W - 1) / s_gt911_y_max);
+    last_y = (LCD_H - 1) - (int16_t)((int32_t)raw_x * (LCD_H - 1) / s_gt911_x_max);
+#ifdef JETCLOCK_TOUCH_DEBUG
+    {
+        static uint32_t last = 0;
+        if (millis() - last > 150) { last = millis(); Serial.printf("[gt911] raw x=%d y=%d\n", last_x, last_y); }
+    }
+#endif
     data->point.x = last_x;
     data->point.y = last_y;
     data->state   = LV_INDEV_STATE_PR;
@@ -258,6 +321,17 @@ void display_init() {
 
     // Touch I2C
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+    delay(100);  // let GT911 settle after power-on
+    gt911_read_config();
+
+#ifdef JETCLOCK_TOUCH_DEBUG
+    Serial.println("[i2c] scanning bus...");
+    for (uint8_t a = 1; a < 127; a++) {
+        Wire.beginTransmission(a);
+        if (Wire.endTransmission() == 0) Serial.printf("[i2c] device found at 0x%02X\n", a);
+    }
+    Serial.println("[i2c] scan done");
+#endif
 
     // SPI init for ST7701S command interface
     st7701s_init();
@@ -301,12 +375,19 @@ void display_init() {
     lv_disp_drv_register(&disp_drv);
 
     lv_indev_drv_init(&indev_drv);
-    indev_drv.type    = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = gt911_read;
+    indev_drv.type         = LV_INDEV_TYPE_POINTER;
+    indev_drv.read_cb      = gt911_read;
+    indev_drv.scroll_limit = 50;  // GT911 can drift >10px; raise limit so taps aren't cancelled
     lv_indev_drv_register(&indev_drv);
 
     // Backlight on
     analogWrite(PIN_BL, 255);
+}
+
+void display_set_brightness(int pct) {
+    if (pct <= 0) { analogWrite(PIN_BL, 0); return; }
+    if (pct > 100) pct = 100;
+    analogWrite(PIN_BL, pct * 255 / 100);
 }
 
 void display_tick() {

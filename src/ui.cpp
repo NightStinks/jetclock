@@ -8,8 +8,7 @@
 LV_IMG_DECLARE(plane_img_80);
 
 // ── Widget handles ────────────────────────────────────────────────────────
-static lv_obj_t *page_main   = nullptr;
-static lv_obj_t *page_radar  = nullptr;
+static lv_obj_t *page_main = nullptr;
 
 // Status bar
 static lv_obj_t *lbl_time;
@@ -20,11 +19,16 @@ static lv_obj_t *lbl_humidity;
 // Flight info
 static lv_obj_t *lbl_callsign;
 static lv_obj_t *lbl_airline;
-static lv_obj_t *lbl_origin;
-static lv_obj_t *lbl_dest;
+static lv_obj_t *lbl_origin_code;
+static lv_obj_t *lbl_origin_city;
+static lv_obj_t *lbl_dest_code;
+static lv_obj_t *lbl_dest_city;
 static lv_obj_t *lbl_distance;
 static lv_obj_t *img_direction_arrow;
 static lv_obj_t *arrow_container;
+
+// WiFi signal bars (4 rectangles in the status bar)
+static lv_obj_t *wifi_bar[4];
 
 // Side-panel slot cards (5 slots). Widgets present depend on card type.
 struct SlotWidgets {
@@ -37,11 +41,6 @@ struct SlotWidgets {
 static SlotWidgets s_slots[MAX_SLOTS];
 static int         s_slot_idx[MAX_SLOTS];  // stable user_data for event callbacks
 
-// Radar page
-static lv_obj_t *p2_lbl_callsign;
-static lv_obj_t *p2_lbl_origin;
-static lv_obj_t *p2_lbl_dest;
-static lv_obj_t *p2_img_plane;
 
 static void (*s_activate_cb)(int) = nullptr;
 static void (*s_value_cb)(int, int) = nullptr;
@@ -121,10 +120,27 @@ static void build_page_main(const AppConfig &cfg) {
                           &lv_font_montserrat_40, s_theme.pri);
     lbl_date = make_label(status_bar, 156, 22, 0, "--- -- ---",
                           &lv_font_montserrat_18, s_theme.sec);
-    lbl_temp = make_label(status_bar, 318, 16, 0, "--°C",
+    lbl_temp = make_label(status_bar, 316, 16, 0, "--°C",
                           &lv_font_montserrat_26, s_theme.pri);
     lbl_humidity = make_label(status_bar, 406, 16, 0, "--%",
                               &lv_font_montserrat_26, s_theme.sec);
+
+    // WiFi signal bars — small, discreet icon-style indicator between date
+    // and temp. 4 bars × 3px wide, 3px gap. Heights: 5, 8, 11, 14px.
+    static const int bar_h[4]   = {5, 8, 11, 14};
+    static const int bar_x0     = 284;
+    static const int bar_bottom = 44;
+    for (int b = 0; b < 4; b++) {
+        lv_obj_t *bar = lv_obj_create(status_bar);
+        lv_obj_set_size(bar, 3, bar_h[b]);
+        lv_obj_set_pos(bar, bar_x0 + b * 6, bar_bottom - bar_h[b]);
+        lv_obj_set_style_radius(bar, 1, 0);
+        lv_obj_set_style_border_width(bar, 0, 0);
+        lv_obj_set_style_bg_color(bar, s_theme.sec, 0);
+        lv_obj_set_style_bg_opa(bar, LV_OPA_20, 0);
+        lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+        wifi_bar[b] = bar;
+    }
 
     // Horizontal divider
     make_rect(page_main, 0, 68, 480, 1, s_theme.border);
@@ -141,26 +157,35 @@ static void build_page_main(const AppConfig &cfg) {
     lbl_airline  = make_label(page_main, 0, 158, 292, " ",
                               &lv_font_montserrat_16, s_theme.sec,
                               LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
-    lbl_origin   = make_label(page_main, 0, 186, 292, "---",
+
+    // Origin/destination stacked as code (large) over city name (small) —
+    // full 292px width per line gives long city names room to breathe.
+    lbl_origin_code = make_label(page_main, 0, 184, 292, "---",
                               &lv_font_montserrat_24, s_theme.pri,
+                              LV_TEXT_ALIGN_CENTER);
+    lbl_origin_city = make_label(page_main, 0, 212, 292, "",
+                              &lv_font_montserrat_14, s_theme.sec,
                               LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
-    lbl_dest     = make_label(page_main, 0, 220, 292, "---",
+    lbl_dest_code   = make_label(page_main, 0, 238, 292, "---",
                               &lv_font_montserrat_24, s_theme.pri,
+                              LV_TEXT_ALIGN_CENTER);
+    lbl_dest_city   = make_label(page_main, 0, 266, 292, "",
+                              &lv_font_montserrat_14, s_theme.sec,
                               LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
-    lbl_distance = make_label(page_main, 0, 256, 292, "--",
-                              &lv_font_montserrat_18, s_theme.sec,
+    lbl_distance = make_label(page_main, 0, 292, 292, "--",
+                              &lv_font_montserrat_16, s_theme.sec,
                               LV_TEXT_ALIGN_CENTER);
 
-    // Direction arrow container — tap → radar page
-    arrow_container = make_rect(page_main, 0, 284, 292, 196, s_theme.bg);
-    lv_obj_add_flag(arrow_container, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(arrow_container, [](lv_event_t *e) {
-        lv_obj_move_foreground(page_radar);
-    }, LV_EVENT_CLICKED, nullptr);
+    // Direction arrow area (non-interactive for now) — a touch smaller than
+    // before to make room for the stacked origin/destination lines above.
+    arrow_container = make_rect(page_main, 0, 316, 292, 164, s_theme.bg);
 
     img_direction_arrow = lv_img_create(arrow_container);
     lv_img_set_src(img_direction_arrow, &plane_img_80);
-    lv_obj_set_pos(img_direction_arrow, 106, 58);
+    lv_img_set_zoom(img_direction_arrow, 500);   // 500/256 × 80px ≈ 156px
+    // pos + pivot = container center (146, 82); zoom scales around the
+    // pivot without moving it, so this stays centered at any zoom level.
+    lv_obj_set_pos(img_direction_arrow, 106, 42);
     lv_img_set_pivot(img_direction_arrow, 40, 40);
     lv_img_set_antialias(img_direction_arrow, true);
 
@@ -202,28 +227,41 @@ static void build_slot(const AppConfig &cfg, int i, int y) {
     }
 
     if (type == CARD_SLIDER) {
-        // Name top-left, value top-right, slider across the bottom.
-        w.label = make_label(card, 10, 8, 100, name, &lv_font_montserrat_14, s_theme.sec,
+        lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
+        // Fill bar behind the labels — grows left to right as user drags
+        lv_obj_t *fill = lv_obj_create(card);
+        lv_obj_set_pos(fill, 0, 0);
+        lv_obj_set_size(fill, 1, 76);
+        lv_obj_set_style_bg_color(fill, s_theme.accent, 0);
+        lv_obj_set_style_bg_opa(fill, LV_OPA_30, 0);
+        lv_obj_set_style_border_width(fill, 0, 0);
+        lv_obj_set_style_radius(fill, 12, 0);
+        lv_obj_clear_flag(fill, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        w.slider = fill;
+        w.label = make_label(card, 10, 10, 100, name, &lv_font_montserrat_14, s_theme.sec,
                              LV_TEXT_ALIGN_LEFT, LV_LABEL_LONG_DOT);
-        w.value = make_label(card, 110, 8, 50, "--%", &lv_font_montserrat_14, s_theme.pri,
+        w.value = make_label(card, 0, 10, 158, "--%", &lv_font_montserrat_14, s_theme.pri,
                              LV_TEXT_ALIGN_RIGHT);
-        lv_obj_t *sl = lv_slider_create(card);
-        lv_obj_set_size(sl, 148, 12);
-        lv_obj_set_pos(sl, 10, 44);
-        lv_slider_set_range(sl, 0, 100);
-        lv_obj_set_style_bg_color(sl, s_theme.border, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(sl, s_theme.accent, LV_PART_INDICATOR);
-        lv_obj_set_style_bg_color(sl, s_theme.pri, LV_PART_KNOB);
-        lv_obj_add_event_cb(sl, [](lv_event_t *e) {
+        // Update fill + label while dragging (visual only)
+        lv_obj_add_event_cb(card, [](lv_event_t *e) {
             int idx = *(int *)lv_event_get_user_data(e);
-            int v = lv_slider_get_value(lv_event_get_target(e));
+            lv_indev_t *indev = lv_indev_get_act(); if (!indev) return;
+            lv_point_t pt; lv_indev_get_point(indev, &pt);
+            int rel = pt.x - 302; if (rel < 0) rel = 0; if (rel > 170) rel = 170;
+            if (s_slots[idx].slider) lv_obj_set_width(s_slots[idx].slider, rel);
             if (s_slots[idx].value) {
-                char b[8]; snprintf(b, sizeof(b), "%d%%", v);
+                char b[8]; snprintf(b, sizeof(b), "%d%%", rel * 100 / 170);
                 lv_label_set_text(s_slots[idx].value, b);
             }
-            if (s_value_cb) s_value_cb(idx, v);
+        }, LV_EVENT_PRESSING, &s_slot_idx[i]);
+        // Send to HA on release
+        lv_obj_add_event_cb(card, [](lv_event_t *e) {
+            int idx = *(int *)lv_event_get_user_data(e);
+            lv_indev_t *indev = lv_indev_get_act(); if (!indev) return;
+            lv_point_t pt; lv_indev_get_point(indev, &pt);
+            int rel = pt.x - 302; if (rel < 0) rel = 0; if (rel > 170) rel = 170;
+            if (s_value_cb) s_value_cb(idx, rel * 100 / 170);
         }, LV_EVENT_RELEASED, &s_slot_idx[i]);
-        w.slider = sl;
         return;
     }
 
@@ -238,105 +276,24 @@ static void build_slot(const AppConfig &cfg, int i, int y) {
 
     // Tappable cards: TOGGLE / LIGHT / ACTION / COVER / LOCK / SELECT / CLIMATE
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
+    // Visual press feedback so the user can confirm touch is landing.
     lv_obj_add_event_cb(card, [](lv_event_t *e) {
+        lv_obj_set_style_bg_opa(lv_event_get_target(e), LV_OPA_70, 0);
+    }, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(card, [](lv_event_t *e) {
+        lv_obj_set_style_bg_opa(lv_event_get_target(e), LV_OPA_COVER, 0);
         if (s_activate_cb) s_activate_cb(*(int *)lv_event_get_user_data(e));
     }, LV_EVENT_CLICKED, &s_slot_idx[i]);
+    lv_obj_add_event_cb(card, [](lv_event_t *e) {
+        lv_obj_set_style_bg_opa(lv_event_get_target(e), LV_OPA_COVER, 0);
+    }, LV_EVENT_PRESS_LOST, nullptr);
 
     w.label = make_label(card, 6, 14, 158, name, &lv_font_montserrat_16, s_theme.sec,
                          LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
-    w.value = make_label(card, 6, 44, 158, "", &lv_font_montserrat_14, s_theme.accent,
+    w.value = make_label(card, 6, 44, 158, "--", &lv_font_montserrat_14, s_theme.accent,
                          LV_TEXT_ALIGN_CENTER, LV_LABEL_LONG_DOT);
 }
 
-// ── Page 2 — Radar ────────────────────────────────────────────────────────
-
-static void build_page_radar() {
-    static const lv_color_t bg_dark  = LV_COLOR_MAKE(0x02, 0x0A, 0x06);
-    static const lv_color_t green    = LV_COLOR_MAKE(0x00, 0xFF, 0x88);
-    static const lv_color_t ring1    = LV_COLOR_MAKE(0x0A, 0x30, 0x18);
-    static const lv_color_t ring2    = LV_COLOR_MAKE(0x09, 0x1F, 0x10);
-    static const lv_color_t ring3    = LV_COLOR_MAKE(0x07, 0x18, 0x0C);
-    static const lv_color_t ring4    = LV_COLOR_MAKE(0x05, 0x12, 0x08);
-    static const lv_color_t crosshair= LV_COLOR_MAKE(0x0A, 0x28, 0x14);
-    static const lv_color_t txt_dim  = LV_COLOR_MAKE(0x1A, 0x4A, 0x2A);
-    static const lv_color_t txt_mid  = LV_COLOR_MAKE(0x1A, 0x6A, 0x3A);
-
-    page_radar = lv_obj_create(lv_scr_act());
-    lv_obj_set_size(page_radar, 480, 480);
-    lv_obj_set_pos(page_radar, 0, 0);
-    lv_obj_set_style_bg_color(page_radar, bg_dark, 0);
-    lv_obj_set_style_bg_opa(page_radar, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(page_radar, 0, 0);
-    lv_obj_set_style_pad_all(page_radar, 0, 0);
-    lv_obj_clear_flag(page_radar, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(page_radar, LV_OBJ_FLAG_CLICKABLE);
-
-    // Tap anywhere → back to main
-    lv_obj_add_event_cb(page_radar, [](lv_event_t *e) {
-        lv_obj_move_foreground(page_main);
-    }, LV_EVENT_CLICKED, nullptr);
-
-    // Header labels
-    make_label(page_radar, 0, 10, 480, "NEAREST FLIGHT",
-               &lv_font_montserrat_12, txt_dim, LV_TEXT_ALIGN_CENTER);
-    p2_lbl_callsign = make_label(page_radar, 0, 26, 480, "--",
-                                 &lv_font_montserrat_40, green, LV_TEXT_ALIGN_CENTER);
-    p2_lbl_origin   = make_label(page_radar, 8, 72, 220, "---",
-                                 &lv_font_montserrat_16, txt_mid,
-                                 LV_TEXT_ALIGN_RIGHT, LV_LABEL_LONG_DOT);
-    make_label(page_radar, 232, 72, 0, ">", &lv_font_montserrat_16, txt_dim);
-    p2_lbl_dest     = make_label(page_radar, 242, 72, 230, "---",
-                                 &lv_font_montserrat_16, txt_mid,
-                                 LV_TEXT_ALIGN_LEFT, LV_LABEL_LONG_DOT);
-
-    // Radar rings (centre 240, 310)
-    auto make_ring = [&](int x, int y, int w, lv_color_t border_col) {
-        lv_obj_t *obj = make_rect(page_radar, x, y, w, w, bg_dark, w / 2);
-        lv_obj_set_style_border_color(obj, border_col, 0);
-        lv_obj_set_style_border_width(obj, 1, 0);
-        lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
-    };
-    make_ring(30,  100, 420, ring1);
-    make_ring(82,  152, 316, ring2);
-    make_ring(135, 205, 210, ring3);
-    make_ring(187, 257, 106, ring4);
-
-    // Crosshair lines
-    make_rect(page_radar, 30, 309, 420, 1, crosshair);
-    make_rect(page_radar, 239, 100, 1, 420, crosshair);
-
-    // Ring distance labels
-    make_label(page_radar, 244, 103, 0, "50km", &lv_font_montserrat_12, ring1);
-    make_label(page_radar, 244, 156, 0, "37km", &lv_font_montserrat_12, ring2);
-    make_label(page_radar, 244, 208, 0, "25km", &lv_font_montserrat_12, ring3);
-    make_label(page_radar, 244, 260, 0, "12km", &lv_font_montserrat_12, ring4);
-
-    // Compass points
-    static const lv_color_t compass = LV_COLOR_MAKE(0x1A, 0x4A, 0x2A);
-    static const lv_color_t compass2= LV_COLOR_MAKE(0x0D, 0x30, 0x18);
-    make_label(page_radar, 205, 103, 0, "NE", &lv_font_montserrat_14, compass);
-    make_label(page_radar, 392, 296, 0, "SE", &lv_font_montserrat_14, compass2);
-    make_label(page_radar, 36,  296, 0, "NW", &lv_font_montserrat_14, compass2);
-
-    // Home location dot (centre 240, 310)
-    lv_obj_t *home_dot = make_rect(page_radar, 232, 302, 16, 16, green, 8);
-    lv_obj_clear_flag(home_dot, LV_OBJ_FLAG_CLICKABLE);
-
-    // Aircraft icon
-    // Radar plane: same 80x80 image scaled to 28px via zoom (89/256 ≈ 28/80)
-    p2_img_plane = lv_img_create(page_radar);
-    lv_img_set_src(p2_img_plane, &plane_img_80);
-    lv_img_set_zoom(p2_img_plane, 89);
-    lv_obj_set_size(p2_img_plane, 28, 28);
-    lv_obj_set_pos(p2_img_plane, 226, 296);
-    lv_img_set_pivot(p2_img_plane, 14, 14);
-    lv_img_set_antialias(p2_img_plane, true);
-    lv_obj_clear_flag(p2_img_plane, LV_OBJ_FLAG_CLICKABLE);
-
-    // Footer
-    make_label(page_radar, 0, 460, 480, "TAP TO RETURN",
-               &lv_font_montserrat_14, crosshair, LV_TEXT_ALIGN_CENTER);
-}
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -347,10 +304,6 @@ void ui_init(const AppConfig &cfg) {
     lv_disp_set_bg_color(disp, lv_color_hex(0x000000));
 
     build_page_main(cfg);
-    build_page_radar();
-
-    // Main page on top
-    lv_obj_move_foreground(page_main);
 }
 
 void ui_set_time(const char *hhmm, const char *date) {
@@ -374,6 +327,23 @@ void ui_set_humidity(float pct) {
     lv_label_set_text(lbl_humidity, buf);
 }
 
+// f.origin/f.dest arrive as "IATA / City" (see enrichment.cpp). Split into
+// a code part and a city part so they can render as stacked labels.
+static void split_code_city(const char *combined, char *code, size_t code_sz,
+                             char *city, size_t city_sz) {
+    const char *sep = strstr(combined, " / ");
+    if (sep) {
+        size_t code_len = (size_t)(sep - combined);
+        if (code_len >= code_sz) code_len = code_sz - 1;
+        memcpy(code, combined, code_len);
+        code[code_len] = '\0';
+        strlcpy(city, sep + 3, city_sz);
+    } else {
+        strlcpy(code, combined, code_sz);
+        city[0] = '\0';
+    }
+}
+
 void ui_set_flight(const FlightData &f, int screen_bearing_deg) {
     s_screen_bearing = screen_bearing_deg;
     s_bearing_deg    = f.bearing_deg;
@@ -381,8 +351,15 @@ void ui_set_flight(const FlightData &f, int screen_bearing_deg) {
 
     if (lbl_callsign) lv_label_set_text(lbl_callsign, f.callsign[0] ? f.callsign : "NO FLIGHT");
     if (lbl_airline)  lv_label_set_text(lbl_airline,  f.airline[0]  ? f.airline  : " ");
-    if (lbl_origin)   lv_label_set_text(lbl_origin,   f.origin[0]   ? f.origin   : "---");
-    if (lbl_dest)     lv_label_set_text(lbl_dest,     f.dest[0]     ? f.dest     : "---");
+
+    char origin_code[16], origin_city[48];
+    char dest_code[16],   dest_city[48];
+    split_code_city(f.origin[0] ? f.origin : "---", origin_code, sizeof(origin_code), origin_city, sizeof(origin_city));
+    split_code_city(f.dest[0]   ? f.dest   : "---", dest_code,   sizeof(dest_code),   dest_city,   sizeof(dest_city));
+    if (lbl_origin_code) lv_label_set_text(lbl_origin_code, origin_code);
+    if (lbl_origin_city) lv_label_set_text(lbl_origin_city, origin_city);
+    if (lbl_dest_code)   lv_label_set_text(lbl_dest_code,   dest_code);
+    if (lbl_dest_city)   lv_label_set_text(lbl_dest_city,   dest_city);
 
     if (lbl_distance) {
         char buf[20];
@@ -403,26 +380,6 @@ void ui_set_flight(const FlightData &f, int screen_bearing_deg) {
         lv_img_set_angle(img_direction_arrow, angle_dd);
     }
 
-    // Radar page — callsign, origin, dest
-    if (p2_lbl_callsign) lv_label_set_text(p2_lbl_callsign, f.callsign[0] ? f.callsign : "--");
-    if (p2_lbl_origin)   lv_label_set_text(p2_lbl_origin, f.origin[0] ? f.origin : "---");
-    if (p2_lbl_dest)     lv_label_set_text(p2_lbl_dest, f.dest[0] ? f.dest : "---");
-
-    // Radar plane position
-    if (p2_img_plane && f.distance_km > 0.0f) {
-        float r = 195.0f * (f.distance_km / 50.0f);
-        if (r > 192.0f) r = 192.0f;
-        float angle_rad = (f.bearing_deg - screen_bearing_deg) * (float)M_PI / 180.0f;
-        int px = (int)(240.0f + r * sinf(angle_rad)) - 14;
-        int py = (int)(310.0f - r * cosf(angle_rad)) - 14;
-        lv_obj_set_pos(p2_img_plane, px, py);
-
-        // Track heading: nose points UP, so rotate clockwise by the track
-        // angle, adjusted for the screen's facing direction.
-        int track_dd = (int)(fmodf(f.track_deg - screen_bearing_deg + 360.0f, 360.0f) * 10.0f);
-        lv_img_set_pivot(p2_img_plane, 14, 14);
-        lv_img_set_angle(p2_img_plane, track_dd);
-    }
 }
 
 void ui_set_slot_state(int idx, const char *state, float value, bool has_value) {
@@ -438,7 +395,8 @@ void ui_set_slot_state(int idx, const char *state, float value, bool has_value) 
     case CARD_SLIDER:
         if (has_value) {
             int v = (int)(value + 0.5f);
-            if (w.slider) lv_slider_set_value(w.slider, v, LV_ANIM_OFF);
+            if (v < 0) v = 0; if (v > 100) v = 100;
+            if (w.slider) lv_obj_set_width(w.slider, v * 170 / 100);
             if (w.value) { char b[8]; snprintf(b, sizeof(b), "%d%%", v); lv_label_set_text(w.value, b); }
         }
         break;
@@ -456,12 +414,38 @@ void ui_set_slot_state(int idx, const char *state, float value, bool has_value) 
         }
         break;
 
-    default:
-        // Tappable cards: tint the card by on/off and show the state word.
+    default: {
+        // Tappable cards: tint card by on/off; show the raw HA state capitalised.
         lv_obj_set_style_bg_color(w.container, on ? s_theme.sec : s_theme.card, 0);
         if (w.label) lv_obj_set_style_text_color(w.label, on ? s_theme.pri : s_theme.sec, 0);
-        if (w.value && state) lv_label_set_text(w.value, on ? "ON" : (state[0] ? state : ""));
+        if (w.value && state && state[0]) {
+            // Capitalise first letter of HA state ("open" → "Open", "on" → "On")
+            char buf[32];
+            strlcpy(buf, state, sizeof(buf));
+            buf[0] = toupper((unsigned char)buf[0]);
+            lv_label_set_text(w.value, buf);
+        }
         break;
+    }
+    }
+}
+
+void ui_set_wifi(int rssi) {
+    if (!wifi_bar[0]) return;
+    // Number of filled bars: ≥-60→4, ≥-70→3, ≥-80→2, else→1. 0=unknown→all dim.
+    int filled = 0;
+    if      (rssi >= -60) filled = 4;
+    else if (rssi >= -70) filled = 3;
+    else if (rssi >= -80) filled = 2;
+    else if (rssi <  -80) filled = 1;
+
+    lv_color_t col = (rssi >= -60) ? lv_color_hex(0x3FB950) :  // green
+                     (rssi >= -75) ? lv_color_hex(0xE3B341) :  // yellow
+                                     lv_color_hex(0xF85149);   // red
+    for (int b = 0; b < 4; b++) {
+        bool active = (rssi != 0) && (b < filled);
+        lv_obj_set_style_bg_color(wifi_bar[b], active ? col : s_theme.sec, 0);
+        lv_obj_set_style_bg_opa(wifi_bar[b],   active ? LV_OPA_70 : LV_OPA_20, 0);
     }
 }
 
@@ -511,11 +495,13 @@ void ui_apply_theme(const char *name) {
     }
     lv_obj_set_style_bg_color(arrow_container, s_theme.bg, 0);
 
-    lv_obj_set_style_text_color(lbl_callsign, s_theme.accent, 0);
-    lv_obj_set_style_text_color(lbl_airline,  s_theme.sec, 0);
-    lv_obj_set_style_text_color(lbl_origin,   s_theme.pri, 0);
-    lv_obj_set_style_text_color(lbl_dest,     s_theme.pri, 0);
-    lv_obj_set_style_text_color(lbl_distance, s_theme.sec, 0);
+    lv_obj_set_style_text_color(lbl_callsign,     s_theme.accent, 0);
+    lv_obj_set_style_text_color(lbl_airline,      s_theme.sec, 0);
+    lv_obj_set_style_text_color(lbl_origin_code,  s_theme.pri, 0);
+    lv_obj_set_style_text_color(lbl_origin_city,  s_theme.sec, 0);
+    lv_obj_set_style_text_color(lbl_dest_code,    s_theme.pri, 0);
+    lv_obj_set_style_text_color(lbl_dest_city,    s_theme.sec, 0);
+    lv_obj_set_style_text_color(lbl_distance,     s_theme.sec, 0);
 
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (!s_slots[i].container) continue;

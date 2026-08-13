@@ -5,17 +5,20 @@
 // Per-slot state update. `state` is the raw HA state string; `value` is the
 // parsed numeric reading (from the slot's attribute, or the state itself) and
 // `has_value` says whether it's valid. The UI interprets these per card type.
-using SlotStateCallback = std::function<void(int slot_idx, const char *state,
-                                             float value, bool has_value)>;
-using TempCallback      = std::function<void(float celsius)>;
-using HumidityCallback  = std::function<void(float pct)>;
+using SlotStateCallback  = std::function<void(int slot_idx, const char *state,
+                                              float value, bool has_value)>;
+using TempCallback       = std::function<void(float celsius)>;
+using HumidityCallback   = std::function<void(float pct)>;
+// Called with effective brightness 0–100 (0 = screen off) whenever the
+// display_power or display_brightness HA entity changes.
+using DisplayCallback    = std::function<void(int brightness_pct)>;
 
 // Initialise the HA REST + WebSocket client.
-// Connects to the HA WebSocket and subscribes to configured entity state changes.
 void ha_client_init(const AppConfig &cfg,
                     SlotStateCallback on_slot_state,
                     TempCallback      on_temp,
-                    HumidityCallback  on_humidity);
+                    HumidityCallback  on_humidity,
+                    DisplayCallback   on_display = nullptr);
 
 // Must be called every loop() — drives the WebSocket event loop.
 void ha_client_tick();

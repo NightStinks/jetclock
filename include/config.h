@@ -61,6 +61,14 @@ struct AppConfig {
     char temp_entity[64];
     char humidity_entity[64];
 
+    // Time
+    char timezone[64]; // POSIX tz string e.g. "GMT0BST,M3.5.0/1,M10.5.0"
+
+    // Display
+    char theme[32];    // e.g. "Midnight", "Forest", "iOS", "Warm Brown"
+    char display_brightness_entity[64]; // input_number 0-100 → backlight level
+    char display_power_entity[64];      // input_boolean/switch → backlight on/off
+
     // Side-panel cards
     SlotConfig slots[MAX_SLOTS];
     int num_slots;

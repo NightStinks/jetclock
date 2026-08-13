@@ -13,10 +13,15 @@ static bool             ws_authed     = false;
 static SlotStateCallback s_on_slot;
 static TempCallback      s_on_temp;
 static HumidityCallback  s_on_humidity;
+static DisplayCallback   s_on_display;
 
 // Cached on/off-ness per slot, so we can synthesise toggles for domains
 // (lock, cover) that have no native "toggle" service.
 static bool s_slot_on[MAX_SLOTS] = {};
+
+// Display brightness/power state from HA.
+static bool s_disp_power      = true;
+static int  s_disp_brightness = 100;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -43,28 +48,21 @@ static bool split_service(const char *full, char *dom, size_t dn, char *svc, siz
     return true;
 }
 
-// ── REST service call (optionally with one numeric data field) ─────────────
+// ── WebSocket service call (non-blocking, uses existing authenticated connection)
 
-static void rest_call_service(const char *domain, const char *service,
-                              const char *entity_id,
-                              const char *data_key = nullptr, int data_val = 0) {
-    if (s_cfg.ha_url[0] == '\0') return;
-    char url[256];
-    snprintf(url, sizeof(url), "%s/api/services/%s/%s", s_cfg.ha_url, domain, service);
-
-    JsonDocument body;
-    if (entity_id && entity_id[0]) body["entity_id"] = entity_id;
-    if (data_key) body[data_key] = data_val;
-    String body_str;
-    serializeJson(body, body_str);
-
-    HTTPClient http;
-    http.begin(url);
-    http.addHeader("Authorization", String("Bearer ") + s_cfg.ha_token);
-    http.addHeader("Content-Type", "application/json");
-    http.setTimeout(5000);
-    http.POST(body_str);
-    http.end();
+static void ws_call_service(const char *domain, const char *service,
+                            const char *entity_id,
+                            const char *data_key = nullptr, int data_val = 0) {
+    if (!ws_authed) return;
+    JsonDocument doc;
+    doc["id"]      = ws_msg_id++;
+    doc["type"]    = "call_service";
+    doc["domain"]  = domain;
+    doc["service"] = service;
+    JsonObject sd = doc["service_data"].to<JsonObject>();
+    if (entity_id && entity_id[0]) sd["entity_id"] = entity_id;
+    if (data_key) sd[data_key] = data_val;
+    ws_send_json(doc);
 }
 
 // ── State extraction ───────────────────────────────────────────────────────
@@ -148,6 +146,19 @@ static void ws_event(WStype_t type, uint8_t *payload, size_t length) {
                 s_on_temp(atof(new_state));
             if (s_cfg.humidity_entity[0] && strcmp(entity_id, s_cfg.humidity_entity) == 0 && s_on_humidity)
                 s_on_humidity(atof(new_state));
+            if (s_on_display) {
+                bool changed = false;
+                if (s_cfg.display_power_entity[0] && strcmp(entity_id, s_cfg.display_power_entity) == 0) {
+                    s_disp_power = is_on_state(new_state);
+                    changed = true;
+                }
+                if (s_cfg.display_brightness_entity[0] && strcmp(entity_id, s_cfg.display_brightness_entity) == 0) {
+                    int v = (int)roundf(atof(new_state));
+                    s_disp_brightness = (v < 1) ? 1 : (v > 100) ? 100 : v;
+                    changed = true;
+                }
+                if (changed) s_on_display(s_disp_power ? s_disp_brightness : 0);
+            }
         }
         break;
     }
@@ -161,11 +172,13 @@ static void ws_event(WStype_t type, uint8_t *payload, size_t length) {
 void ha_client_init(const AppConfig &cfg,
                     SlotStateCallback on_slot_state,
                     TempCallback on_temp,
-                    HumidityCallback on_humidity) {
+                    HumidityCallback on_humidity,
+                    DisplayCallback on_display) {
     s_cfg         = cfg;
     s_on_slot     = on_slot_state;
     s_on_temp     = on_temp;
     s_on_humidity = on_humidity;
+    s_on_display  = on_display;
 
     if (s_cfg.ha_url[0] == '\0') return;
 
@@ -197,28 +210,28 @@ void ha_client_activate(int i) {
         // Explicit "domain.service" if given, else sensible default per domain.
         char dom[24], svc[24];
         if (s.service[0] && split_service(s.service, dom, sizeof(dom), svc, sizeof(svc))) {
-            rest_call_service(dom, svc, s.entity_id);
-        } else if (strcmp(d, "scene") == 0)      rest_call_service("scene", "turn_on", s.entity_id);
-        else if (strcmp(d, "script") == 0)       rest_call_service("script", "turn_on", s.entity_id);
-        else if (strcmp(d, "automation") == 0)   rest_call_service("automation", "trigger", s.entity_id);
-        else if (strcmp(d, "button") == 0)       rest_call_service("button", "press", s.entity_id);
-        else if (strcmp(d, "input_button") == 0) rest_call_service("input_button", "press", s.entity_id);
-        else                                     rest_call_service(d, "turn_on", s.entity_id);
+            ws_call_service(dom, svc, s.entity_id);
+        } else if (strcmp(d, "scene") == 0)      ws_call_service("scene", "turn_on", s.entity_id);
+        else if (strcmp(d, "script") == 0)       ws_call_service("script", "turn_on", s.entity_id);
+        else if (strcmp(d, "automation") == 0)   ws_call_service("automation", "trigger", s.entity_id);
+        else if (strcmp(d, "button") == 0)       ws_call_service("button", "press", s.entity_id);
+        else if (strcmp(d, "input_button") == 0) ws_call_service("input_button", "press", s.entity_id);
+        else                                     ws_call_service(d, "turn_on", s.entity_id);
         break;
     }
     case CARD_COVER:
-        rest_call_service("cover", s_slot_on[i] ? "close_cover" : "open_cover", s.entity_id);
+        ws_call_service("cover", s_slot_on[i] ? "close_cover" : "open_cover", s.entity_id);
         break;
     case CARD_LOCK:
-        rest_call_service("lock", s_slot_on[i] ? "lock" : "unlock", s.entity_id);
+        ws_call_service("lock", s_slot_on[i] ? "lock" : "unlock", s.entity_id);
         break;
     case CARD_SELECT:
-        rest_call_service(d[0] ? d : "select", "select_next", s.entity_id);
+        ws_call_service(d[0] ? d : "select", "select_next", s.entity_id);
         break;
     case CARD_TOGGLE:
     case CARD_LIGHT:
     default:
-        rest_call_service(d[0] ? d : "homeassistant", "toggle", s.entity_id);
+        ws_call_service(d[0] ? d : "homeassistant", "toggle", s.entity_id);
         break;
     }
 }
@@ -229,11 +242,11 @@ void ha_client_set_value(int i, int value) {
     if (value < 0) value = 0; if (value > 100) value = 100;
 
     if (strcmp(s.domain, "light") == 0)
-        rest_call_service("light", "turn_on", s.entity_id, "brightness_pct", value);
+        ws_call_service("light", "turn_on", s.entity_id, "brightness_pct", value);
     else if (strcmp(s.domain, "cover") == 0)
-        rest_call_service("cover", "set_cover_position", s.entity_id, "position", value);
+        ws_call_service("cover", "set_cover_position", s.entity_id, "position", value);
     else if (strcmp(s.domain, "fan") == 0)
-        rest_call_service("fan", "set_percentage", s.entity_id, "percentage", value);
+        ws_call_service("fan", "set_percentage", s.entity_id, "percentage", value);
 }
 
 void ha_client_refresh_all() {
@@ -263,5 +276,20 @@ void ha_client_refresh_all() {
     if (s_cfg.humidity_entity[0]) {
         JsonDocument doc;
         if (fetch(s_cfg.humidity_entity, doc) && s_on_humidity) s_on_humidity(atof(doc["state"] | "0"));
+    }
+    if (s_on_display) {
+        if (s_cfg.display_power_entity[0]) {
+            JsonDocument doc;
+            if (fetch(s_cfg.display_power_entity, doc))
+                s_disp_power = is_on_state(doc["state"] | "on");
+        }
+        if (s_cfg.display_brightness_entity[0]) {
+            JsonDocument doc;
+            if (fetch(s_cfg.display_brightness_entity, doc)) {
+                int v = (int)roundf(atof(doc["state"] | "100"));
+                s_disp_brightness = (v < 1) ? 1 : (v > 100) ? 100 : v;
+            }
+        }
+        s_on_display(s_disp_power ? s_disp_brightness : 0);
     }
 }

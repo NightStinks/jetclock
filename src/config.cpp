@@ -33,6 +33,12 @@ bool config_load(AppConfig &cfg) {
     prefs.getString("ha_token",      cfg.ha_token,      sizeof(cfg.ha_token));
     prefs.getString("temp_entity",   cfg.temp_entity,   sizeof(cfg.temp_entity));
     prefs.getString("hum_entity",    cfg.humidity_entity, sizeof(cfg.humidity_entity));
+    prefs.getString("timezone",       cfg.timezone,        sizeof(cfg.timezone));
+    if (!cfg.timezone[0]) strlcpy(cfg.timezone, "GMT0BST,M3.5.0/1,M10.5.0", sizeof(cfg.timezone));
+    prefs.getString("theme",         cfg.theme,           sizeof(cfg.theme));
+    if (!cfg.theme[0]) strlcpy(cfg.theme, "Midnight", sizeof(cfg.theme));
+    prefs.getString("disp_bright_e", cfg.display_brightness_entity, sizeof(cfg.display_brightness_entity));
+    prefs.getString("disp_power_e",  cfg.display_power_entity,      sizeof(cfg.display_power_entity));
 
     cfg.num_slots = prefs.getInt("num_slots", 0);
     if (cfg.num_slots > MAX_SLOTS) cfg.num_slots = MAX_SLOTS;
@@ -70,6 +76,10 @@ void config_save(const AppConfig &cfg) {
     prefs.putString("ha_token",  cfg.ha_token);
     prefs.putString("temp_entity",  cfg.temp_entity);
     prefs.putString("hum_entity",   cfg.humidity_entity);
+    prefs.putString("timezone",       cfg.timezone);
+    prefs.putString("theme",         cfg.theme);
+    prefs.putString("disp_bright_e", cfg.display_brightness_entity);
+    prefs.putString("disp_power_e",  cfg.display_power_entity);
     prefs.putInt("num_slots",  cfg.num_slots);
 
     for (int i = 0; i < cfg.num_slots; i++) {
@@ -112,6 +122,10 @@ void config_to_json(const AppConfig &cfg, JsonDocument &doc, bool mask_secrets) 
     doc["ha_token"]       = mask_secrets ? "********" : cfg.ha_token;
     doc["temp_entity"]    = cfg.temp_entity;
     doc["humidity_entity"] = cfg.humidity_entity;
+    doc["timezone"]                   = cfg.timezone;
+    doc["theme"]                      = cfg.theme;
+    doc["display_brightness_entity"]  = cfg.display_brightness_entity;
+    doc["display_power_entity"]       = cfg.display_power_entity;
 
     JsonArray slots = doc["slots"].to<JsonArray>();
     for (int i = 0; i < cfg.num_slots; i++) {
@@ -144,6 +158,12 @@ bool config_from_json(const JsonDocument &doc, AppConfig &cfg) {
     strlcpy(cfg.ha_token,        doc["ha_token"]        | "", sizeof(cfg.ha_token));
     strlcpy(cfg.temp_entity,     doc["temp_entity"]     | "", sizeof(cfg.temp_entity));
     strlcpy(cfg.humidity_entity, doc["humidity_entity"] | "", sizeof(cfg.humidity_entity));
+    strlcpy(cfg.timezone, doc["timezone"] | "GMT0BST,M3.5.0/1,M10.5.0", sizeof(cfg.timezone));
+    if (!cfg.timezone[0]) strlcpy(cfg.timezone, "GMT0BST,M3.5.0/1,M10.5.0", sizeof(cfg.timezone));
+    strlcpy(cfg.theme,                     doc["theme"]                     | "Midnight", sizeof(cfg.theme));
+    if (!cfg.theme[0]) strlcpy(cfg.theme, "Midnight", sizeof(cfg.theme));
+    strlcpy(cfg.display_brightness_entity, doc["display_brightness_entity"] | "", sizeof(cfg.display_brightness_entity));
+    strlcpy(cfg.display_power_entity,      doc["display_power_entity"]      | "", sizeof(cfg.display_power_entity));
 
     JsonArrayConst slots = doc["slots"].as<JsonArrayConst>();
     cfg.num_slots = 0;

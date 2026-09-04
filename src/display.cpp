@@ -281,9 +281,9 @@ static void gt911_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
         return;
     }
 
-    // Read first touch point (8 bytes starting at 0x8150)
+    // Read first touch point (8 bytes starting at 0x814F)
     Wire.beginTransmission(GT911_ADDR);
-    Wire.write(0x81); Wire.write(0x50);
+    Wire.write(0x81); Wire.write(0x4F);
     Wire.endTransmission();
     Wire.requestFrom((int)GT911_ADDR, 8);
 
